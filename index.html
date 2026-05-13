@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BDC Flash Drill</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0C0C0E;--surface:#161618;--surface2:#1E1E22;--border:#2A2A2E;
+  --text:#E8E8EC;--muted:#7A7A82;--accent:#4ADE80;--accent2:#22C55E;
+  --wrong:#F87171;--warn:#FBBF24;--blue:#60A5FA;
+  --radius:14px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased}
+.app{max-width:480px;margin:0 auto;padding:20px 16px 40px}
+
+/* Header */
+.header{text-align:center;padding:24px 0 20px}
+.header h1{font-family:'JetBrains Mono',monospace;font-size:1.1rem;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--accent)}
+.header .sub{font-size:.8rem;color:var(--muted);margin-top:4px;font-weight:300}
+
+/* Stats bar */
+.stats-bar{display:flex;gap:8px;margin-bottom:20px}
+.stat{flex:1;background:var(--surface);border-radius:10px;padding:12px 10px;text-align:center;border:1px solid var(--border)}
+.stat-value{font-family:'JetBrains Mono',monospace;font-size:1.3rem;font-weight:600}
+.stat-label{font-size:.65rem;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin-top:2px}
+.stat-value.green{color:var(--accent)}
+.stat-value.red{color:var(--wrong)}
+.stat-value.blue{color:var(--blue)}
+
+/* Progress */
+.progress-bar{height:4px;background:var(--surface);border-radius:2px;margin-bottom:24px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;transition:width .4s ease}
+
+/* Timer */
+.timer{text-align:center;margin-bottom:16px;font-family:'JetBrains Mono',monospace;font-size:.85rem;color:var(--muted)}
+.timer span{color:var(--warn)}
+
+/* Card */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px 22px;margin-bottom:16px;animation:fadeIn .3s ease}
+.card-category{font-size:.68rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent);margin-bottom:12px;font-weight:500}
+.card-type{display:inline-block;padding:3px 10px;border-radius:6px;font-size:.62rem;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;font-weight:600}
+.card-type.mc{background:rgba(96,165,250,.15);color:var(--blue)}
+.card-type.type{background:rgba(74,222,128,.15);color:var(--accent)}
+.card-type.catch{background:rgba(251,191,36,.15);color:var(--warn)}
+.card-prompt{font-size:1rem;line-height:1.65;font-weight:400;margin-bottom:20px}
+.card-prompt em,.card-prompt strong{color:var(--text)}
+
+/* Options */
+.options{display:flex;flex-direction:column;gap:10px}
+.option-btn{background:var(--surface2);border:1.5px solid var(--border);border-radius:11px;padding:14px 16px;font-family:'Outfit',sans-serif;font-size:.9rem;color:var(--text);cursor:pointer;transition:all .2s;text-align:left;line-height:1.5}
+.option-btn:hover{border-color:var(--accent);background:rgba(74,222,128,.05)}
+.option-btn.selected{border-color:var(--accent);background:rgba(74,222,128,.08)}
+.option-btn.correct{border-color:var(--accent);background:rgba(74,222,128,.12);color:var(--accent)}
+.option-btn.wrong{border-color:var(--wrong);background:rgba(248,113,113,.08);color:var(--wrong)}
+.option-btn:disabled{cursor:default;opacity:.85}
+
+/* Text input */
+.type-area{position:relative}
+.type-input{width:100%;min-height:100px;padding:14px 16px;background:var(--surface2);border:1.5px solid var(--border);border-radius:11px;font-family:'Outfit',sans-serif;font-size:.9rem;color:var(--text);resize:vertical;outline:none;line-height:1.6}
+.type-input:focus{border-color:var(--accent)}
+.type-input::placeholder{color:var(--muted)}
+
+/* Submit btn */
+.submit-btn{width:100%;padding:15px;border:none;border-radius:11px;font-family:'Outfit',sans-serif;font-size:.9rem;font-weight:600;cursor:pointer;transition:all .2s;margin-top:14px;letter-spacing:.5px}
+.submit-btn.primary{background:var(--accent);color:var(--bg)}
+.submit-btn.primary:hover{background:var(--accent2)}
+.submit-btn.next{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.submit-btn.next:hover{border-color:var(--accent)}
+
+/* Feedback */
+.feedback{padding:18px;border-radius:11px;margin-top:14px;font-size:.85rem;line-height:1.7;animation:fadeIn .3s ease}
+.feedback.correct-fb{background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);color:var(--accent)}
+.feedback.wrong-fb{background:rgba(248,113,113,.06);border:1px solid rgba(248,113,113,.15);color:var(--wrong)}
+.feedback .fb-label{font-family:'JetBrains Mono',monospace;font-size:.7rem;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;display:block}
+.feedback .correct-answer{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06);color:var(--muted);font-size:.82rem}
+
+/* Completion screen */
+.completion{text-align:center;padding:40px 20px;animation:fadeIn .4s ease}
+.completion-icon{font-size:3rem;margin-bottom:16px}
+.completion h2{font-family:'JetBrains Mono',monospace;font-size:1.2rem;margin-bottom:8px;letter-spacing:1px}
+.completion p{color:var(--muted);font-size:.9rem;line-height:1.6;margin-bottom:24px}
+.completion-stats{display:flex;gap:12px;justify-content:center;margin-bottom:28px}
+.comp-stat{background:var(--surface);border-radius:10px;padding:16px 20px;border:1px solid var(--border)}
+.comp-stat .val{font-family:'JetBrains Mono',monospace;font-size:1.5rem;font-weight:600}
+.comp-stat .lbl{font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-top:2px}
+
+/* Start screen */
+.start-screen{text-align:center;padding:60px 20px}
+.start-screen h2{font-family:'JetBrains Mono',monospace;font-size:1.4rem;margin-bottom:12px;letter-spacing:1px}
+.start-screen p{color:var(--muted);font-size:.9rem;line-height:1.7;margin-bottom:32px}
+.start-screen .rules{text-align:left;background:var(--surface);border-radius:var(--radius);padding:20px;margin-bottom:28px;border:1px solid var(--border)}
+.start-screen .rules div{padding:6px 0;font-size:.85rem;color:var(--muted)}
+.start-screen .rules span{color:var(--accent);font-family:'JetBrains Mono',monospace;font-weight:600;margin-right:8px}
+.rep-input{width:100%;padding:14px 16px;background:var(--surface2);border:1.5px solid var(--border);border-radius:11px;font-family:'Outfit',sans-serif;font-size:.95rem;color:var(--text);outline:none;margin-bottom:16px;text-align:center}
+.rep-input:focus{border-color:var(--accent)}
+.rep-input::placeholder{color:var(--muted)}
+
+/* Streak */
+.streak{display:inline-flex;align-items:center;gap:5px;background:var(--surface);padding:4px 12px;border-radius:20px;font-family:'JetBrains Mono',monospace;font-size:.75rem;color:var(--warn);border:1px solid rgba(251,191,36,.15)}
+
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script>
+const $=id=>document.getElementById(id);
+/* ========== QUESTION BANK ========== */
+const Q=[
+// SEC 1 — Script
+{id:'script-opening-01',type:'type-from-memory',cat:'Script — Opening',prompt:'Type the opening line from memory. Customer\'s name is Sarah, vehicle is a 2020 Honda Pilot.',correct:'Hi Sarah, this is [rep name] from [dealer name]\'s vehicle acquisition team. I\'m following up on the text we sent about your 2020 Honda Pilot.',feedback:'Open with: your name, dealer name + "vehicle acquisition team", and the specific vehicle.',keys:['vehicle acquisition team','following up','text we sent']},
+{id:'script-opening-02',type:'situation-recognition',cat:'Script — Opening',prompt:'Right after the opening, you ask: "Do you have a quick minute?" Why?',options:['Politeness — you\'re interrupting them','To filter out people who can\'t talk and avoid wasting time on a bad call window','To get them to say yes early so they\'re more likely to say yes later','The script says to'],correct:1,feedback:'It\'s a filter, not politeness. If they can\'t talk, you\'d rather know in 5 seconds than waste 4 minutes.'},
+{id:'script-opening-03',type:'catch-the-violation',cat:'Opening — tone',prompt:'Rep says: "Hi Sarah, this is Mike, sorry to bother you — I\'m just calling about your Honda. Is now a bad time?" What\'s wrong?',correct:'Apologetic tone. "Sorry to bother you" + "just calling" + "bad time" frame the call as an imposition before the customer has decided anything.',feedback:'Three apology signals in one line. Open confident, not apologetic.',keys:['apologetic','sorry','imposition']},
+{id:'script-discovery-01',type:'type-from-memory',cat:'Script — Discovery',prompt:'List the five Discovery intel fields you\'re trying to capture.',correct:'(1) Why now / what triggered them, (2) What they\'d want to get into, (3) Timeline, (4) Decision-maker presence, (5) Past dealership experience.',feedback:'Five fields: trigger, target vehicle, timeline, decision-makers, past experience.',keys:['trigger','timeline','decision','experience','vehicle']},
+{id:'script-discovery-02',type:'situation-recognition',cat:'Discovery — intent vs. data',prompt:'Which Discovery question is doing INTENT work (good), not DATA work (bad)?',options:['"What are you paying now?"','"What got you thinking about this right now?"','"How much do you have for a down payment?"','"What\'s your credit score?"'],correct:1,feedback:'Intent questions uncover why they responded. Data questions anchor the desk and feel like an interrogation.'},
+{id:'script-value-01',type:'type-from-memory',cat:'Script — Value Bridge',prompt:'Type the Value Bridge from memory.',correct:'The number we sent is based on the market and what we can see remotely. The final value depends on condition — the team puts a firm number on it once they look at it in person.',feedback:'Two pieces: what the remote number is based on, and why the in-person look is more accurate.',keys:['market','remotely','condition','in person','firm number']},
+{id:'script-value-02',type:'situation-recognition',cat:'Value Bridge — framing',prompt:'The Value Bridge frames the in-person inspection as:',options:['Higher than the remote number','More accurate than the remote number','A formality the dealer requires','A chance to negotiate'],correct:1,feedback:'Always "more accurate." Never "higher." Promising higher is Critical Rule 03.'},
+{id:'script-summary-01',type:'type-from-memory',cat:'Script — Summary Bridge',prompt:'Type the Summary Bridge format from memory.',correct:'Let me make sure I\'ve got this right. You\'re thinking about your [vehicle] because [motivation]. Ideally, you\'d want to [goal/vehicle interest], and you\'re looking to figure this out [timeline]. Does that sound right?',feedback:'Four slots: vehicle, motivation, goal, timeline.',keys:['make sure','vehicle','motivation','timeline','sound right']},
+{id:'script-summary-02',type:'situation-recognition',cat:'Summary Bridge — purpose',prompt:'Why do you run the Summary Bridge BEFORE the Soft Commitment?',options:['The customer hears their own situation back and confirms it, so the next "yes" comes easier','The script says to','It fills time before the appointment ask','It buys time to think'],correct:0,feedback:'The Summary makes the customer say yes to their own situation. Two small yeses lead to the appointment yes.'},
+{id:'script-soft-01',type:'type-from-memory',cat:'Script — Soft Commitment',prompt:'Type the Soft Commitment line from memory.',correct:'Based on all of that — if we could get you into [what they described] and take [their pain point] off your plate, would that be worth exploring?',feedback:'"If we could… would it be worth exploring" is conditional, low-stakes, and makes it feel like the customer\'s idea.',keys:['if we could','worth exploring','pain point']},
+{id:'script-soft-02',type:'catch-the-violation',cat:'Soft Commitment — wording',prompt:'Rep says: "So based on all of that — can we book you in for tomorrow at 10?" What\'s wrong?',correct:'Skipped the Soft Commitment, jumped straight to appointment ask. No "if we could… would it be worth exploring" — no concept yes before the time yes.',feedback:'Two yeses before the time. Soft Commitment gets a concept yes; THEN you ask for the time.',keys:['skipped','concept yes','worth exploring']},
+{id:'script-soft-03',type:'situation-recognition',cat:'Soft Commitment — payment',prompt:'Customer mentioned payment on their own. The Soft Commitment should now include:',options:['"...at a payment that works for you..."','"...at the lowest payment possible..."','"...with a great rate..."','Don\'t change anything — keep it generic'],correct:0,feedback:'When they volunteer payment, fold it in. Never anchor to a specific number, never promise a rate.'},
+{id:'script-appt-01',type:'type-from-memory',cat:'Script — Appointment Setting',prompt:'Type the appointment-setting opener (after the Soft Commitment "yes").',correct:'Great — then let\'s get you set up. What works better for you — morning or afternoon?',feedback:'Two-option close. Don\'t ask "when can you come in?" — give morning or afternoon, then narrow.',keys:['morning','afternoon','set up']},
+{id:'script-appt-02',type:'situation-recognition',cat:'Appointment Setting — confirmation',prompt:'After they pick a time, you confirm. What must your confirmation include?',options:['Day, time, dealership name, who they\'ll meet with','Just the time','Day, time, and the appraisal range you quoted','Day, time, and a reminder that the number might go up'],correct:0,feedback:'Day, time, dealership, contact name. Don\'t restate the appraisal range and never promise the number will go up.'},
+{id:'script-credit-01',type:'situation-recognition',cat:'Discovery — credit handling',prompt:'Customer volunteers: "My credit\'s pretty bad — that\'s gonna be a problem, right?" What\'s the rule?',options:['Never introduce credit, but if they bring it up engage naturally and pass it through','Ask their credit score so the dealer can prep','Reassure them with "we work with all credit"','Tell them not to worry about it'],correct:0,feedback:'You never ask. If they volunteer, acknowledge, frame as the team\'s job, and capture for handoff.'},
+{id:'script-credit-02',type:'catch-the-violation',cat:'Credit handling',prompt:'Rep says: "Got it — yeah, with a 580 score you\'d probably be looking at 12-15% on a used. But don\'t worry, our finance guys are magicians." What\'s wrong?',correct:'(1) Engaged with the credit score number (gave a rate estimate), (2) made a promise about the finance team. Both are out of bounds for BDC.',feedback:'Credit handling: acknowledge + frame as team\'s job + capture. Never rate estimates, never finance promises.',keys:['rate estimate','promise','out of bounds']},
+// SEC 2 — Three Critical Rules
+{id:'rule-01-recall',type:'type-from-memory',cat:'The Three Critical Rules',prompt:'What is Critical Rule 01?',correct:'Never proactively tell the customer the ROboT value is too low.',feedback:'If they think the number is low, let them say so first.',keys:['never','proactively','too low']},
+{id:'rule-02-recall',type:'type-from-memory',cat:'The Three Critical Rules',prompt:'What is Critical Rule 02?',correct:'Never ask what the customer wants for their car.',feedback:'Asking anchors their number.',keys:['never','ask','wants for']},
+{id:'rule-03-recall',type:'type-from-memory',cat:'The Three Critical Rules',prompt:'What is Critical Rule 03?',correct:'Never promise the in-person number will be higher.',feedback:'Frame as more accurate, not higher. Process certainty, not outcome promise.',keys:['never','promise','higher']},
+{id:'rule-violation-01',type:'catch-the-violation',cat:'Critical Rule 01',prompt:'Rep says: "Hi Sarah, this is Mike from Premier Auto. I\'m following up on the text about your Pilot. I want to be upfront — I know the number we sent was probably lower than you were expecting…" Which rule was broken?',correct:'Critical Rule 01 — proactively told the customer the number was probably low.',feedback:'Don\'t seed doubt the customer didn\'t have.',keys:['rule 01','proactively','low']},
+{id:'rule-violation-02',type:'catch-the-violation',cat:'Critical Rule 02',prompt:'Rep says: "So you\'re thinking about something smaller. Before we figure out what your Pilot is worth — what were you hoping to get for it?" Which rule was broken?',correct:'Critical Rule 02 — asked what the customer wants for their car.',feedback:'Skip the anchor question, go to the Soft Commitment instead.',keys:['rule 02','hoping to get','anchor']},
+{id:'rule-violation-03',type:'catch-the-violation',cat:'Critical Rule 03',prompt:'Customer says: "That number seems kind of low to me." Rep responds: "I totally understand. Don\'t worry — once they see the car in person, that number usually goes up." Which rule was broken?',correct:'Critical Rule 03 — promised the in-person number will be higher.',feedback:'Frame in-person look as MORE ACCURATE, not higher.',keys:['rule 03','goes up','higher','promise']},
+{id:'rule-violation-04',type:'catch-the-violation',cat:'Critical Rule 01 — soft',prompt:'Rep says: "Now look, the number we sent — that\'s just a starting point. Don\'t get too attached to it." What\'s wrong?',correct:'Critical Rule 01 — soft version of "the number is low." Telling them not to get attached implies it\'s not real.',feedback:'Any framing that signals "this number might disappoint you" violates Rule 01.',keys:['rule 01','starting point','attached']},
+{id:'rule-violation-05',type:'catch-the-violation',cat:'Critical Rule 02 — disguised',prompt:'Rep says: "What kind of ballpark would you need to make this worth it for you?" What\'s wrong?',correct:'Critical Rule 02 — disguised anchor question. "Ballpark" is still asking what they want.',feedback:'Rule 02 covers any version of asking what they want — ballpark, range, "in mind," "expecting."',keys:['rule 02','ballpark','anchor']},
+{id:'rule-violation-06',type:'catch-the-violation',cat:'Critical Rule 03 — implied',prompt:'Customer: "I was hoping for closer to 18." Rep: "I hear you. With the condition you described, I bet you\'ll see a real bump from the team." What\'s wrong?',correct:'Critical Rule 03 — implied outcome promise ("you\'ll see a real bump").',feedback:'"Real bump" = promised higher number. Stay on process.',keys:['rule 03','bump','promise','higher']},
+// SEC 3 — Situation Recognition
+{id:'sitrec-01',type:'situation-recognition',cat:'Situation type',prompt:'Customer: "I\'m just looking for a number — not really trying to sell." What kind of situation?',options:['Direct objection','Emotional resistance','Indecision — Information Gap','No resistance — just info-gathering'],correct:2,feedback:'"Just looking for a number" is information-gap indecision. JOLT, not AER.'},
+{id:'sitrec-02',type:'situation-recognition',cat:'Situation type',prompt:'Customer: "I don\'t want to come in and get pressured." What kind?',options:['Direct objection','Emotional resistance','Indecision — Outcome Uncertainty','No resistance'],correct:2,feedback:'"Don\'t want to be pressured" is JOLT — Outcome Uncertainty. Take risk off the table.'},
+{id:'sitrec-03',type:'situation-recognition',cat:'Situation type',prompt:'Customer: "I need to talk to my husband first." What kind?',options:['Direct objection (AER)','Emotional resistance (FFF)','Indecision (JOLT)','No resistance'],correct:0,feedback:'Direct objection with specific content — real third party. AER.'},
+{id:'sitrec-04',type:'situation-recognition',cat:'Situation type',prompt:'Customer: "Yeah look, I already got an offer from Carvana for 22." What kind?',options:['Direct objection','Emotional resistance — predictable, common','Indecision — Choice Overload','No resistance'],correct:1,feedback:'Carvana offer is predictable, emotionally-charged pushback. FFF.'},
+{id:'sitrec-05',type:'situation-recognition',cat:'Situation type',prompt:'Customer: "I don\'t know — there are so many options out there. I\'m not sure what I\'d even want to get into." What kind?',options:['Emotional resistance','Indecision — Choice Overload','Indecision — Information Gap','Direct objection'],correct:1,feedback:'Classic Choice Overload. JOLT: OFFER a recommendation.'},
+{id:'sitrec-06',type:'situation-recognition',cat:'Situation type',prompt:'Customer: "That number is too low. There\'s no way my car is worth that." What kind?',options:['Direct objection — specific, named','Emotional resistance — predictable, common','Indecision','No resistance'],correct:1,feedback:'"Too low" is predictable emotional — FFF every time.'},
+{id:'sitrec-07',type:'situation-recognition',cat:'Situation type',prompt:'Customer: "Yeah, that sounds good. When\'s a good time?" What kind?',options:['No resistance — book the appointment','Emotional resistance','Indecision','Trick question'],correct:0,feedback:'No resistance — just book it. Don\'t over-framework past the close.'},
+{id:'sitrec-08',type:'situation-recognition',cat:'Situation type',prompt:'Customer: "Look, I just want to think about it. Can you call me next week?" What kind?',options:['Direct objection — clear ask','Emotional resistance','Indecision — Outcome Uncertainty (most likely)','No resistance'],correct:2,feedback:'"Let me think about it" is almost always OU indecision. Don\'t accept the exit.'},
+{id:'sitrec-09',type:'situation-recognition',cat:'Objection vs. indecision',prompt:'Customer: "I\'m not ready right now." What kind?',options:['Direct objection — Use AER to explore what "not ready" means','Definite indecision — Use JOLT','No resistance','Emotional resistance'],correct:0,feedback:'AER\'s Explore step is the diagnostic — "Can I ask what made you curious enough to check?"'},
+{id:'sitrec-10',type:'situation-recognition',cat:'JOLT subtype',prompt:'Customer: "Can you send me some more info? I want to compare a few places before I decide." Which JOLT subtype?',options:['Choice Overload (CO)','Information Gap (IG)','Outcome Uncertainty (OU)','Not JOLT'],correct:1,feedback:'Classic Information Gap. Limit the exploration — more info won\'t give a firm offer.'},
+{id:'sitrec-11',type:'situation-recognition',cat:'JOLT subtype',prompt:'Customer: "I\'ve had a bad experience at a dealership before. I really don\'t want to go through that again." Which JOLT subtype?',options:['Choice Overload','Information Gap','Outcome Uncertainty','Not JOLT'],correct:2,feedback:'Outcome Uncertainty — fear rooted in past experience. Take risk off the table.'},
+{id:'sitrec-12',type:'situation-recognition',cat:'JOLT subtype frequency',prompt:'Which JOLT subtype is most common in our BDC?',options:['Choice Overload','Information Gap','Outcome Uncertainty','Equal split'],correct:2,feedback:'OU dominates. Most JOLT moments route through Take Risk Off.'},
+{id:'sitrec-13',type:'situation-recognition',cat:'JOLT vs. AER diagnostic',prompt:'What\'s the test for whether a situation is indecision (JOLT) vs. direct objection (AER)?',options:['Indecision means they want to act but can\'t commit. Objections are specific blockers.','Indecision is emotional; objections are logical','Indecision is when they haven\'t decided; objections are when they have','They\'re the same thing'],correct:0,feedback:'Indecision: wants to act, can\'t commit. Objection: specific blocker they\'ve named.'},
+{id:'sitrec-14',type:'situation-recognition',cat:'Hybrid situations',prompt:'Customer opens with "the number\'s too low" (FFF territory). You respond with FFF. They then say "I don\'t even know if I want a different car right now." What happened?',options:['Situation shifted — second part is Choice Overload. Switch to JOLT-Offer.','Keep running FFF','Drop the call','Run AER on the second statement'],correct:0,feedback:'When the type changes, switch tools. This is a Framework Hybrid.'},
+{id:'sitrec-15',type:'situation-recognition',cat:'Objection-not-indecision',prompt:'Customer: "I\'m just looking for a number." You ask what brought them in. They say: "Honestly, my husband doesn\'t even know I sent the text." What happened?',options:['What looked like indecision is actually a decision-maker objection — switch to AER','Stay in JOLT','Book the appointment','End the call'],correct:0,feedback:'Objection-not-indecision — real blocker underneath. AER\'s Explore surfaced it.'},
+// SEC 4 — Framework Selection
+{id:'frame-sel-01',type:'framework-selection',cat:'Direct objection',prompt:'Customer: "I need to talk to my wife first." Which framework?',options:['AER','FFF','JOLT','No framework — book the appointment'],correct:0,feedback:'Specific, named objection (real third party) — AER.'},
+{id:'frame-sel-02',type:'framework-selection',cat:'Emotional resistance',prompt:'Customer: "Your number is way too low — there\'s no way I\'m settling for that." Which framework?',options:['AER','FFF','JOLT','Argue the number'],correct:1,feedback:'"Too low" is predictable emotional pushback. FFF.'},
+{id:'frame-sel-03',type:'framework-selection',cat:'Indecision',prompt:'Customer: "I\'m just not sure if I should trade it in or sell it privately." Which framework?',options:['AER','FFF','JOLT','Send them more info'],correct:2,feedback:'Choice Overload — stuck between options. JOLT: OFFER a recommendation.'},
+{id:'frame-sel-04',type:'framework-selection',cat:'Predictable emotional',prompt:'Customer: "I already got an offer from CarMax for 24." Which framework?',options:['AER','FFF','JOLT','Beat the offer'],correct:1,feedback:'Common, predictable, emotional. FFF.'},
+{id:'frame-sel-05',type:'framework-selection',cat:'Outcome Uncertainty',prompt:'Customer: "What if I come in and the number is totally different?" Which framework?',options:['AER','FFF','JOLT — Take Risk Off','Reassure them generally'],correct:2,feedback:'OU. Take risk off — describe exactly what happens, emphasize control.'},
+{id:'frame-sel-06',type:'framework-selection',cat:'Information Gap',prompt:'Customer: "Can you email me a breakdown? I want to look at it before I decide." Which framework?',options:['AER','FFF','JOLT — Limit the exploration','Send the email'],correct:2,feedback:'Information Gap. Sending more info feeds the loop. Limit.'},
+{id:'frame-sel-07',type:'framework-selection',cat:'Unique situation',prompt:'Customer: "My brother-in-law owns a body shop and he says these online appraisals are a scam." Which framework?',options:['AER — specific, unusual, need to explore','FFF — predictable emotional','JOLT — indecision','Disagree with the brother-in-law'],correct:0,feedback:'Unique objection — AER with real Explore work.'},
+{id:'frame-sel-08',type:'framework-selection',cat:'Pivot-moment recognition',prompt:'Customer agreed to "think about it." You sense they\'re at the fork. Which framework?',options:['AER — pivot is always AER','JOLT — "let me think" is almost always indecision','FFF — "let me think" is emotional','No framework — let them go'],correct:1,feedback:'"Let me think about it" is nearly always OU indecision. JOLT Take Risk Off.'},
+{id:'frame-sel-09',type:'framework-selection',cat:'No framework needed',prompt:'Customer: "Yeah, this sounds good. What times work?" Which framework?',options:['AER — always run a framework','FFF','JOLT','None — book the appointment'],correct:3,feedback:'No resistance, no framework. Over-framework is a real failure mode. Book.'},
+{id:'frame-sel-10',type:'framework-selection',cat:'Diagnostic question',prompt:'A call failed to convert. What\'s the one diagnostic question?',options:['Wrong tool, poor execution, or no tool used?','Was the customer qualified?','Did the rep follow the script?','Was the lead good?'],correct:0,feedback:'Three branches: wrong tool → coach selection. Right tool, poor → coach skill. No tool → coach deployment.'},
+// SEC 5 — Framework Step Recall
+{id:'aer-step-01',type:'type-from-memory',cat:'AER — three steps',prompt:'Type the three steps of AER.',correct:'Acknowledge — Explore — Redirect.',feedback:'Acknowledge (take the heat out), Explore (one question), Redirect (steer back).',keys:['acknowledge','explore','redirect']},
+{id:'aer-step-02',type:'situation-recognition',cat:'AER — most-skipped step',prompt:'Which AER step do reps skip most often?',options:['Acknowledge','Explore','Redirect','None — reps do all three'],correct:1,feedback:'Skipping Explore is the #1 partial-execution pattern.'},
+{id:'aer-step-03',type:'situation-recognition',cat:'AER — Explore step',prompt:'The Explore step is:',options:['Three or four clarifying questions','One clarifying question to surface what\'s underneath','An open-ended invitation','Skipping ahead to the appointment ask'],correct:1,feedback:'ONE question. Not five — one.'},
+{id:'fff-step-01',type:'type-from-memory',cat:'FFF — three steps',prompt:'Type the three steps of FFF.',correct:'Feel — Felt — Found.',feedback:'Feel (validate), Felt (normalize), Found (what they discovered).',keys:['feel','felt','found']},
+{id:'fff-step-02',type:'situation-recognition',cat:'FFF — load-bearing step',prompt:'Which FFF step does the actual conversion work?',options:['Feel','Felt','Found','All equal'],correct:2,feedback:'Found is load-bearing. Without it you have empathy without social proof.'},
+{id:'fff-step-03',type:'catch-the-violation',cat:'FFF — the trap',prompt:'Rep says: "I totally get how you feel. So when can you come in?" What\'s wrong?',correct:'Skipped Felt AND Found. Went straight from Feel to appointment ask.',feedback:'THE FFF trap. Validation alone doesn\'t convert. All three steps, in order.',keys:['skipped','felt','found']},
+{id:'jolt-step-01',type:'type-from-memory',cat:'JOLT — four letters',prompt:'Type what each letter of JOLT stands for.',correct:'J — Judge the level of indecision. O — Offer a recommendation. L — Limit the exploration. T — Take risk off the table.',feedback:'Judge first, then pick ONE of O/L/T based on subtype.',keys:['judge','offer','limit','take risk off']},
+{id:'jolt-step-02',type:'situation-recognition',cat:'JOLT — pairings',prompt:'Match the JOLT subtype to the tool:',options:['CO → Offer, IG → Limit, OU → Take Risk Off','CO → Limit, IG → Take Risk Off, OU → Offer','CO → Take Risk Off, IG → Offer, OU → Limit','All three subtypes get the same tool'],correct:0,feedback:'CO → Offer. IG → Limit. OU → Take Risk Off.'},
+{id:'jolt-step-03',type:'situation-recognition',cat:'JOLT — most-used tool',prompt:'Which JOLT tool will you use most often?',options:['Offer','Limit','Take Risk Off','Equal split'],correct:2,feedback:'Take Risk Off, because OU is the dominant subtype.'},
+{id:'jolt-step-04',type:'catch-the-violation',cat:'JOLT — wrong tool',prompt:'Customer (CO): "I just don\'t know what I\'d want to get into — so many options." Rep responds: "Let me describe exactly what\'ll happen at the appointment." What\'s wrong?',correct:'Used Take Risk Off (T) for Choice Overload (CO). CO needs Offer (O).',feedback:'Right framework, wrong tool for the subtype.',keys:['choice overload','offer','wrong tool']},
+// SEC 6 — Eight Objections
+{id:'obj-not-ready-01',type:'type-from-memory',cat:'Objection — "Not ready to sell"',prompt:'Customer: "I\'m not really ready to sell my car." Frame: AER. Type your response.',correct:'A: That\'s totally fair — most people who respond aren\'t ready to do anything yet. E: Can I ask what made you curious enough to check? R: Even if you\'re not ready now, it might be worth knowing what you\'re working with.',feedback:'AER, all three steps. "What made you curious enough to check?" is the key Explore question.',keys:['fair','curious','worth knowing']},
+{id:'obj-pressured-01',type:'type-from-memory',cat:'Objection — "Don\'t want pressure"',prompt:'Customer: "I don\'t want to come in and get pressured." Frame: AER. Type your response.',correct:'A: I get it — nobody wants that experience. E: Have you had bad experiences with dealerships before? R: You\'re coming in for one thing: a firm number. You control how far this goes.',feedback:'"You control how far this goes" is the load-bearing phrase.',keys:['nobody wants','bad experiences','you control']},
+{id:'obj-spouse-01',type:'type-from-memory',cat:'Objection — "Talk to spouse"',prompt:'Customer: "I need to talk to my husband first." Frame: AER. Type your response.',correct:'A: Absolutely — that\'s a smart move. E: Have you two talked about this at all? R: What if we set something up where you can both come in?',feedback:'Redirect turns the spouse from obstacle into participant. Joint appointment.',keys:['smart move','talked about','both come in']},
+{id:'obj-payment-01',type:'type-from-memory',cat:'Objection — "What\'s my payment"',prompt:'Customer: "What would my payment be?" Frame: AER. Type your response.',correct:'A: Great question — payment is one of those things everyone wants to understand. E: Are you more focused on keeping it close to what you\'re paying now, or is there flexibility? R: Payment depends on a few moving pieces — the team is really good at putting that puzzle together.',feedback:'Never quote a number. Frame payment as the dealer\'s puzzle to solve.',keys:['great question','moving pieces','puzzle']},
+{id:'obj-carvana-01',type:'type-from-memory',cat:'Objection — "Got a Carvana offer"',prompt:'Customer: "I already got an offer from Carvana." Frame: FFF. Type your response.',correct:'Smart — it\'s always good to compare. A lot of people feel like one offer is enough. What they\'ve found is that getting a second written offer gives them leverage either way.',feedback:'Feel → Felt → Found. Found is the conversion piece.',keys:['compare','feel','found','leverage']},
+{id:'obj-too-low-01',type:'type-from-memory',cat:'Objection — "Number too low"',prompt:'Customer: "The number is too low." Frame: FFF. Type your response.',correct:'I understand how you feel — the preliminary number doesn\'t always reflect the full picture. A lot of people felt the same way initially. What they found is that the in-person look often surfaces things the remote estimate can\'t see.',feedback:'Frame as "more accurate" / "surfaces things the remote can\'t see," not "higher."',keys:['feel','felt','found','surfaces','remote']},
+{id:'obj-just-looking-01',type:'type-from-memory',cat:'Objection — "Just looking for a number"',prompt:'Customer: "I\'m just looking for a number — not really trying to sell." Frame: JOLT (IG). Type your response.',correct:'Totally get it — most people start there. The number we sent is based on what we can see remotely. The real number depends on seeing the car in person. The fastest way to know where you actually stand is 20 minutes with the team.',feedback:'Limit the exploration. Frame more info as a dead end; in-person as the only path to certainty.',keys:['remotely','in person','20 minutes','firm']},
+{id:'obj-let-me-think-01',type:'type-from-memory',cat:'Objection — "Let me think about it"',prompt:'Customer: "Let me think about it." Frame: JOLT (OU). Type your response.',correct:'Of course. Can I tell you exactly what\'ll happen if you do come in? You drive in, the team takes a look, you get a firm written offer. If the number works, they\'ll show you options. If not, you shake hands and leave — no pressure, no obligation. You\'re in control the entire time.',feedback:'Take risk off. Describe specifically. Emphasize control. Shrink the decision.',keys:['exactly what\'ll happen','firm','no pressure','you\'re in control']},
+{id:'obj-carvana-found-01',type:'catch-the-violation',cat:'FFF — Found missing',prompt:'Customer: "I already got an offer from Carvana." Rep: "Totally get it — comparing makes sense. So if I could find a time for you to come in, would tomorrow work?" What\'s wrong?',correct:'Skipped Felt AND Found. Went from Feel straight to appointment ask.',feedback:'FFF without Found is just empathy. The conversion happens in Found.',keys:['skipped','felt','found']},
+{id:'obj-pressured-explore-01',type:'catch-the-violation',cat:'AER — Explore missing',prompt:'Customer: "I don\'t want to come in and get pressured." Rep: "I get it — nobody wants that. You\'re coming in for one thing: a firm number." What\'s wrong?',correct:'Skipped Explore. Went straight from Acknowledge to Redirect. Never asked about bad experiences.',feedback:'Explore is the diagnostic. Without the question you\'re guessing.',keys:['skipped','explore','bad experience']},
+// SEC 7 — Archetype-Diagnostic
+{id:'arch-acc-01',type:'situation-recognition',cat:'Archetype — Accommodator',prompt:'An Accommodator\'s most common gap is:',options:['Pushing too hard','Treating the first "no" as the final "no" and not asking one follow-up question','Talking too much','Failing to follow the script'],correct:1,feedback:'ONE follow-up question past the first no. That\'s the entire move.'},
+{id:'arch-cha-01',type:'situation-recognition',cat:'Archetype — Challenger',prompt:'A Challenger\'s biggest framework gap is:',options:['Low AER use','Low FFF use on emotional objections (defaults to AER)','Low script adherence','Talking too softly'],correct:1,feedback:'Challengers default to AER on emotional pushback. AER on emotions makes it worse — FFF is the tool.'},
+{id:'arch-over-01',type:'situation-recognition',cat:'Archetype — Overthinker',prompt:'An Overthinker\'s most common gap is:',options:['Not knowing the script','Over-researching during discovery and running long calls that don\'t convert','Poor tone','Not caring'],correct:1,feedback:'Overthinkers stay in discovery too long. Cap discovery, move to the Soft Commitment.'},
+{id:'arch-op-01',type:'situation-recognition',cat:'Archetype — Operator',prompt:'An Operator\'s gap usually shows up as:',options:['Low conversion','Framework execution that\'s technically correct but tonally flat — sounds scripted','Too much energy','Poor time management'],correct:1,feedback:'Operators follow the process but lack warmth. Tone coaching, not framework coaching.'},
+{id:'arch-rc-01',type:'situation-recognition',cat:'Archetype — Role-Conflicted',prompt:'A Role-Conflicted rep\'s fundamental issue is:',options:['They don\'t know the script','They believe the ROboT number is unfair to the customer, so they soft-pedal the value bridge','They talk too fast','They don\'t like their manager'],correct:1,feedback:'Belief misalignment. If they think the number is bad, every framework will sound hollow. Fix the belief first.'},
+// SEC 8 — Top Performer
+{id:'peer-mark-01',type:'situation-recognition',cat:'Top performer — Mark Singh',prompt:'Mark Singh creates urgency without pressure by:',options:['Promising a great deal','Projecting confidence that the customer will get a good outcome','Setting hard deadlines','Asking the customer to commit immediately'],correct:1,feedback:'Confidence projection resolves outcome uncertainty. JOLT principle.'},
+{id:'peer-austin-01',type:'situation-recognition',cat:'Top performer — Austin Soutas',prompt:'Austin Soutas\'s signature move is:',options:['Long discovery','Friction removal — making the appointment feel smaller','Aggressive closing','Heavy product education'],correct:1,feedback:'Short calls, clean logistics, specific times, no pressure. JOLT "take risk off."'},
+{id:'peer-tee-01',type:'situation-recognition',cat:'Top performer — Tee Sagio',prompt:'Tee Sagio\'s "conditional commitment" language sounds like:',options:['"You have to come in today"','"If your vehicle is as clean as you say, the numbers shouldn\'t get in the way"','"Trust me, you\'ll love it"','"I can guarantee a great offer"'],correct:1,feedback:'Conditional yes — customer commits to a condition they control.'},
+// SEC 9 — Handoff Intel Notes
+{id:'intel-01',type:'situation-recognition',cat:'Handoff intel — strong vs. weak',prompt:'Which handoff note is more useful?\n(a) "Owes $16k, paying $450/mo. Wants to stay under $500. Looking for a Sorento with 3rd row."\n(b) "Repair costs pushing her out — spent $2k in 3 months. Wants a Sorento with 3rd row. Ready this week. Bad experience elsewhere — gentle approach. Husband coming."',options:['(a)','(b)'],correct:1,feedback:'Intent + heat + barriers + decision-makers. The second tells the dealer WHY, HOW HOT, WHAT MIGHT KILL IT, and HOW TO HANDLE.'},
+{id:'intel-priority-order',type:'type-from-memory',cat:'Intel Note — priority order',prompt:'Type the four-item priority order for a handoff intel note, in order.',correct:'(1) Vehicle they want, (2) Trade / payoff / equity, (3) Timing, (4) Motivation level.',feedback:'Vehicle → Trade → Timing → Motivation. Discovery order ≠ note-writing order.',keys:['vehicle','trade','timing','motivation']},
+{id:'intel-five-second-test',type:'situation-recognition',cat:'Intel Note — five-second test',prompt:'When the dealer opens your handoff email, how long do they spend deciding whether to act?',options:['30 seconds','2 minutes','About 5 seconds','As long as it takes'],correct:2,feedback:'Five seconds. The first sentence has to earn the call.'},
+{id:'intel-rule-01',type:'type-from-memory',cat:'Intel Note — Rule 01',prompt:'State Intel Note Rule 01.',correct:'Lead with what the customer wants to DO, not that they want an appraisal.',feedback:'Every lead is an appraisal — that\'s not news. Lead with what they want to DO.',keys:['lead with','wants to do','not appraisal']},
+{id:'intel-rule-02',type:'type-from-memory',cat:'Intel Note — Rule 02',prompt:'State Intel Note Rule 02.',correct:'Write like you\'re texting a coworker who sells cars.',feedback:'Direct, casual, informative. Not formal.',keys:['texting','coworker','casual']},
+{id:'intel-rule-03',type:'type-from-memory',cat:'Intel Note — Rule 03',prompt:'State Intel Note Rule 03.',correct:'Under four sentences. One paragraph. No bullets.',feedback:'The dealer scans for five seconds. One short block, four sentences max.',keys:['four sentences','one paragraph','no bullets']},
+{id:'intel-payment-rule',type:'situation-recognition',cat:'Intel Note — payoff vs. payment',prompt:'Customer told you their monthly payment is $475 and that\'s her ceiling. Should this go in the handoff note?',options:['Yes — payment is required intel','Yes — but with framing: what she said, plus that you framed it as situational','No — we never include payment','Only if you also captured payoff'],correct:1,feedback:'Payment: include ONLY if customer volunteered it, with "I framed as situational" tag.'},
+{id:'intel-lender-signal',type:'situation-recognition',cat:'Intel Note — buying signal',prompt:'Customer says their payoff is "about $18k — I called my lender last week." What\'s the relevance of "called my lender"?',options:['Buying signal — they did the work to get an accurate payoff','Means nothing','Means they don\'t trust the number','Means they\'re setting expectations low'],correct:0,feedback:'A customer who called their lender has already taken action toward the deal.'},
+{id:'intel-self-check',type:'situation-recognition',cat:'Intel Note — self-check',prompt:'Before you send a handoff note, the three self-check questions are:',options:['Why is this person coming in? What should the dealer prepare? What are the financial guardrails?','Name, phone, when can they come in?','Payment, payoff, credit info?','Just "why are they coming in?"'],correct:0,feedback:'Three questions, every note. If your note doesn\'t answer at least two, you\'re missing intel.'},
+{id:'intel-weak-seemed-interested',type:'situation-recognition',cat:'Intel Note — weak phrase',prompt:'A rep\'s note includes: "She seemed interested in exploring her options." What\'s wrong?',options:['Nothing — it\'s fine','"Seemed interested" is rep code for "I didn\'t ask the hard question."','Wrong grammar','Too short'],correct:1,feedback:'Replace filler with what the customer ACTUALLY said or did.'},
+{id:'intel-weak-if-numbers-right',type:'catch-the-violation',cat:'Intel Note — weak phrase',prompt:'Rep\'s note: "Customer would like to discuss her trade-in. If the numbers are right she\'d consider coming in. She seemed interested." What\'s wrong?',correct:'"If the numbers are right" is rep code for "I didn\'t ask the hard question." Combined with "seemed interested," the note has no real intel.',feedback:'Strong version names what would make the numbers right.',keys:['numbers are right','seemed interested','no real intel']},
+{id:'intel-weak-we-informed',type:'catch-the-violation',cat:'Intel Note — weak phrase',prompt:'Rep\'s note opens: "We informed the customer that we will provide a final valuation after inspection. The customer responded to our automated valuation and seemed interested." What\'s wrong?',correct:'The note is about what WE told THEM, not what THEY told US. The dealer cares about what the customer said.',feedback:'Flip it. The note should be about what the CUSTOMER said.',keys:['we told them','flip','customer said']},
+{id:'intel-weak-appraisal-lead',type:'catch-the-violation',cat:'Intel Note — leading with appraisal',prompt:'Rep\'s note: "Customer is interested in getting an appraisal done on their 2018 Honda Pilot. Would like to discuss options pending physical inspection." Which rule was broken?',correct:'Rule 01 — led with the appraisal (the mechanism), not what the customer wants to DO.',feedback:'Every lead we send is about an appraisal — lead with what the customer wants to DO.',keys:['rule 01','appraisal','wants to do']},
+{id:'intel-strong-recognition',type:'situation-recognition',cat:'Intel Note — strong note recognition',prompt:'Which is a strong intel note?\n(a) "Customer is interested in getting an appraisal on their Pilot."\n(b) "Wants a Sorento with 3rd row. Owes $16k, paying $450/mo (volunteered — I framed as situational). Not in a rush but said she\'d move if the deal is right. Have Sorento options ready."\n(c) "Spoke with customer today. They seemed interested."\n(d) "Customer called. Wants to talk."',options:['(a)','(b)','(c)','(d)'],correct:1,feedback:'(b) hits everything: what she wants, deal structure with framing tag, timeline, motivation, and what to prepare.'},
+{id:'intel-discovery-vs-note-order',type:'situation-recognition',cat:'Intel Note — discovery vs. note order',prompt:'On the phone, you started discovery with "What got you thinking about this?" (motivation). In the handoff note, motivation goes:',options:['First — same as discovery','Last — dealer needs vehicle and deal structure first','Doesn\'t matter','Not in the note at all'],correct:1,feedback:'Discovery order ≠ note-writing order. Motivation goes LAST in the note.'},
+{id:'intel-add-when-you-have-it',type:'situation-recognition',cat:'Intel Note — add-when-you-have-it',prompt:'Customer mentioned her son is 6\'3" and wants to work with Mike like last time. Should these go in the note?',options:['No — irrelevant','Yes — physical needs AND salesperson preference are "add-when-you-have-it" items','Only the salesperson preference','Only the height'],correct:1,feedback:'Both go in. Dealer can prepare vehicles with legroom AND route lead to Mike.'},
+{id:'intel-jolt-summary',type:'situation-recognition',cat:'Intel Note — JOLT-informed',prompt:'A JOLT-informed handoff note conveys five things beyond the basic priority order. What are they?',options:['Price, payment, term, rate, down payment','Why they\'re here, how hot they are, what might kill the deal, what they need to see, who\'s coming','Vehicle, year, mileage, condition, VIN','Just the appointment time'],correct:1,feedback:'Intent summary, not financial summary.'},
+// SEC 10 — Pivot Moments
+{id:'pivot-01',type:'situation-recognition',cat:'Pivot moment definition',prompt:'A pivot moment is:',options:['The first 30 seconds of the call','The 15-30 second window where the conversation is at a fork','The end of the call','Any time the customer interrupts'],correct:1,feedback:'15-30 second window at a fork. Every reviewed call has one.'},
+{id:'pivot-02',type:'situation-recognition',cat:'Pivot moment — recovery',prompt:'Customer was moving toward appointment. They just said "let me think about it." What\'s pivot recovery?',options:['Accept the exit, call back next week','Run JOLT (likely Take Risk Off) before the call ends','Argue','Drop the lead'],correct:1,feedback:'Deploy a tool at the fork. Most "let me think about it" exits are OU.'},
+// SEC 11 — Discovery
+{id:'disc-01',type:'situation-recognition',cat:'Discovery — Act 1 vs. Act 2',prompt:'A customer responded to a ROboT text. JOLT/Dixon research says they\'re in:',options:['Act 1 — still being convinced to consider change','Act 2 — already past the status quo, ready to consider options','Pre-Act 1 — no intent yet','The research doesn\'t apply to BDC calls'],correct:1,feedback:'Responding = intent expressed = Act 2. Don\'t relitigate the status quo.'},
+{id:'disc-02',type:'catch-the-violation',cat:'Discovery — data collection trap',prompt:'Rep asks: "What are you paying now? What do you want your payment to be? How much do you have for a down payment?" What\'s wrong?',correct:'Pure data collection. None surface intent or barriers — they anchor the desk and feel like an interrogation.',feedback:'Shift to intent questions: "What got you thinking about this right now?"',keys:['data collection','anchor','interrogation']},
+// SEC 13 — Foundations
+{id:'found-01',type:'situation-recognition',cat:'Frameworks — which is which',prompt:'Match framework to situation type:',options:['AER = emotional, FFF = direct, JOLT = no resistance','AER = direct objection, FFF = emotional resistance, JOLT = indecision','AER = indecision, FFF = direct, JOLT = emotional','They\'re interchangeable'],correct:1,feedback:'Direct objection → AER. Emotional → FFF. Indecision → JOLT. Match framework to situation.'},
+{id:'found-02',type:'situation-recognition',cat:'Frameworks — "no tool used" failure',prompt:'You hit a pivot moment. You recognized it. You had the right framework in mind. You deployed nothing. What\'s the coaching response?',options:['Coach framework selection','Coach framework execution','Coach deployment — you had the moment, you had the tools, deploy ONE','Coach situation recognition'],correct:2,feedback:'"No tool used" is its own coaching bucket. The fix isn\'t more knowledge; it\'s the muscle to deploy under pressure.'},
+];
+
+/* ========== SPACED REPETITION (Leitner 5-bucket) ========== */
+function getRepState(){try{return JSON.parse(localStorage.getItem('bdc_drill_state')||'{}')}catch{return{}}}
+function saveRepState(s){localStorage.setItem('bdc_drill_state',JSON.stringify(s))}
+
+function pickQuestions(count=4){
+  const state=getRepState();
+  const now=Date.now();
+  const bucketIntervals=[0,0,2*864e5,4*864e5,7*864e5,14*864e5]; // ms
+  // Build eligible pool
+  const pool=[];
+  Q.forEach(q=>{
+    const s=state[q.id]||{bucket:1,lastSeen:0,correct:0,wrong:0};
+    const interval=bucketIntervals[s.bucket]||0;
+    const due=s.lastSeen+interval;
+    if(now>=due)pool.push({...q,_bucket:s.bucket,_due:due});
+  });
+  // Weight toward lower buckets
+  pool.sort((a,b)=>a._bucket-b._bucket||(a._due-b._due));
+  // Pick from lowest buckets first, with some randomness
+  const picked=[];
+  const shuffled=[...pool].sort(()=>Math.random()-.5);
+  // Prioritize bucket 1, then 2, etc.
+  for(let b=1;b<=5&&picked.length<count;b++){
+    const inBucket=shuffled.filter(q=>q._bucket===b&&!picked.includes(q));
+    for(const q of inBucket){if(picked.length<count)picked.push(q);}
+  }
+  // Fill remaining with any due
+  for(const q of shuffled){if(picked.length<count&&!picked.includes(q))picked.push(q);}
+  // Final shuffle
+  return picked.sort(()=>Math.random()-.5);
+}
+
+function recordAnswer(qId,isCorrect){
+  const state=getRepState();
+  const s=state[qId]||{bucket:1,lastSeen:0,correct:0,wrong:0};
+  if(isCorrect){s.bucket=Math.min(s.bucket+1,5);s.correct++;}
+  else{s.bucket=1;s.wrong++;}
+  s.lastSeen=Date.now();
+  state[qId]=s;
+  saveRepState(state);
+}
+
+function getOverallStats(){
+  const state=getRepState();
+  let total=0,correct=0,wrong=0,mastered=0;
+  Object.values(state).forEach(s=>{total++;correct+=s.correct;wrong+=s.wrong;if(s.bucket>=4)mastered++;});
+  return{seen:total,correct,wrong,mastered,total:Q.length};
+}
+
+/* ========== GRADING ========== */
+function gradeTyped(input,q){
+  const keys=q.keys||[];
+  if(!keys.length)return input.trim().length>15; // fallback: at least wrote something substantial
+  const lower=input.toLowerCase();
+  let hits=0;
+  keys.forEach(k=>{if(lower.includes(k.toLowerCase()))hits++});
+  return hits>=Math.ceil(keys.length*.5); // need 50% of keywords
+}
+
+/* ========== APP ========== */
+let questions=[],currentIdx=0,sessionCorrect=0,sessionWrong=0,timerInterval=null,timeLeft=180;
+const app=$('app');
+
+function renderStart(){
+  const stats=getOverallStats();
+  app.innerHTML=`
+    <div class="header"><h1>BDC Flash Drill</h1><div class="sub">3 minutes · 4 questions · daily</div></div>
+    <div class="start-screen">
+      <h2>Ready to drill?</h2>
+      <p>4 questions in 3 minutes. Missed questions come back tomorrow. Mastered ones space out.</p>
+      <div class="rules">
+        <div><span>📊</span> ${stats.seen} of ${stats.total} questions seen</div>
+        <div><span>🎯</span> ${stats.mastered} mastered (bucket 4+)</div>
+        <div><span>✅</span> ${stats.correct} correct lifetime</div>
+        <div><span>❌</span> ${stats.wrong} wrong lifetime</div>
+      </div>
+      <input class="rep-input" id="repName" placeholder="Your name" value="${localStorage.getItem('bdc_rep_name')||''}" />
+      <button class="submit-btn primary" onclick="startDrill()">Start Drill</button>
+    </div>`;
+}
+
+function startDrill(){
+  const name=$('repName')?.value?.trim();
+  if(name)localStorage.setItem('bdc_rep_name',name);
+  questions=pickQuestions(4);
+  currentIdx=0;sessionCorrect=0;sessionWrong=0;timeLeft=180;
+  renderQuestion();
+  startTimer();
+}
+
+function startTimer(){
+  clearInterval(timerInterval);
+  timerInterval=setInterval(()=>{
+    timeLeft--;
+    const el=document.getElementById('timerDisplay');
+    if(el){const m=Math.floor(timeLeft/60);const s=timeLeft%60;el.innerHTML=`<span>${m}:${s<10?'0':''}${s}</span> remaining`;}
+    if(timeLeft<=0){clearInterval(timerInterval);renderCompletion();}
+  },1000);
+}
+
+function renderQuestion(){
+  if(currentIdx>=questions.length){clearInterval(timerInterval);renderCompletion();return;}
+  const q=questions[currentIdx];
+  const progress=((currentIdx)/questions.length)*100;
+  const isMC=q.type==='situation-recognition'||q.type==='framework-selection';
+  const isType=q.type==='type-from-memory';
+  const isCatch=q.type==='catch-the-violation';
+  const typeLabel=isMC?'Multiple Choice':isType?'Type From Memory':'Spot the Error';
+  const typeClass=isMC?'mc':isType?'type':'catch';
+
+  let bodyHTML='';
+  if(isMC){
+    bodyHTML=`<div class="options">${q.options.map((o,i)=>`<button class="option-btn" data-idx="${i}" onclick="selectOption(this,${i})">${o}</button>`).join('')}</div><button class="submit-btn primary" id="submitBtn" onclick="submitMC()" disabled>Submit</button>`;
+  }else{
+    bodyHTML=`<div class="type-area"><textarea class="type-input" id="typeInput" placeholder="${isType?'Type your answer from memory...':'What\'s wrong? Type your answer...'}"></textarea></div><button class="submit-btn primary" onclick="submitTyped()">Submit</button>`;
+  }
+
+  app.innerHTML=`
+    <div class="header"><h1>BDC Flash Drill</h1></div>
+    <div class="stats-bar">
+      <div class="stat"><div class="stat-value">${currentIdx+1}/${questions.length}</div><div class="stat-label">Question</div></div>
+      <div class="stat"><div class="stat-value green">${sessionCorrect}</div><div class="stat-label">Correct</div></div>
+      <div class="stat"><div class="stat-value red">${sessionWrong}</div><div class="stat-label">Wrong</div></div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" style="width:${progress}%"></div></div>
+    <div class="timer" id="timerDisplay"><span>${Math.floor(timeLeft/60)}:${(timeLeft%60)<10?'0':''}${timeLeft%60}</span> remaining</div>
+    <div class="card">
+      <div class="card-category">${q.cat}</div>
+      <div class="card-type ${typeClass}">${typeLabel}</div>
+      <div class="card-prompt">${q.prompt.replace(/\n/g,'<br>')}</div>
+      ${bodyHTML}
+      <div id="feedbackArea"></div>
+    </div>`;
+}
+
+let selectedOption=-1;
+function selectOption(btn,idx){
+  document.querySelectorAll('.option-btn').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+  selectedOption=idx;
+  $('submitBtn').disabled=false;
+}
+
+function submitMC(){
+  const q=questions[currentIdx];
+  const isCorrect=selectedOption===q.correct;
+  recordAnswer(q.id,isCorrect);
+  if(isCorrect)sessionCorrect++;else sessionWrong++;
+
+  document.querySelectorAll('.option-btn').forEach((b,i)=>{
+    b.disabled=true;
+    if(i===q.correct)b.classList.add('correct');
+    if(i===selectedOption&&!isCorrect)b.classList.add('wrong');
+  });
+  $('submitBtn').style.display='none';
+  showFeedback(isCorrect,q);
+}
+
+function submitTyped(){
+  const q=questions[currentIdx];
+  const input=$('typeInput').value;
+  const isCorrect=gradeTyped(input,q);
+  recordAnswer(q.id,isCorrect);
+  if(isCorrect)sessionCorrect++;else sessionWrong++;
+  $('typeInput').disabled=true;
+  showFeedback(isCorrect,q,true);
+}
+
+function showFeedback(isCorrect,q,showCorrectAnswer=false){
+  const fb=document.getElementById('feedbackArea');
+  fb.innerHTML=`
+    <div class="feedback ${isCorrect?'correct-fb':'wrong-fb'}">
+      <span class="fb-label">${isCorrect?'✓ Correct':'✗ Incorrect'}</span>
+      ${q.feedback}
+      ${!isCorrect&&q.correct&&typeof q.correct==='string'?`<div class="correct-answer"><strong>Correct answer:</strong><br>${q.correct}</div>`:''}
+    </div>
+    <button class="submit-btn next" onclick="nextQuestion()">Next →</button>`;
+}
+
+function nextQuestion(){currentIdx++;renderQuestion();}
+
+function renderCompletion(){
+  clearInterval(timerInterval);
+  const pct=questions.length?Math.round((sessionCorrect/questions.length)*100):0;
+  const stats=getOverallStats();
+  const icon=pct>=75?'🔥':pct>=50?'💪':'📚';
+  app.innerHTML=`
+    <div class="header"><h1>BDC Flash Drill</h1></div>
+    <div class="completion">
+      <div class="completion-icon">${icon}</div>
+      <h2>Drill Complete</h2>
+      <p>${pct>=75?'Strong session. Keep it up.':pct>=50?'Solid work. Missed items come back tomorrow.':'Tough round. Those missed items will return until they stick.'}</p>
+      <div class="completion-stats">
+        <div class="comp-stat"><div class="val" style="color:var(--accent)">${sessionCorrect}</div><div class="lbl">Correct</div></div>
+        <div class="comp-stat"><div class="val" style="color:var(--wrong)">${sessionWrong}</div><div class="lbl">Wrong</div></div>
+        <div class="comp-stat"><div class="val" style="color:var(--blue)">${pct}%</div><div class="lbl">Score</div></div>
+      </div>
+      <div style="margin-bottom:20px;color:var(--muted);font-size:.85rem">
+        ${stats.mastered} of ${stats.total} questions mastered · ${stats.seen} seen
+      </div>
+      <button class="submit-btn primary" onclick="startDrill()">Drill Again</button>
+      <button class="submit-btn next" style="margin-top:10px" onclick="renderStart()">Back to Home</button>
+    </div>`;
+}
+
+renderStart();
+</script>
+</body>
+</html>
