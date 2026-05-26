@@ -146,18 +146,33 @@ as $$
 $$;
 
 -- ============================================================
--- Permissions
+-- Row Level Security + permissions
 -- ============================================================
 
--- Lock down `reps` — anon key cannot read pin_hash or query directly.
--- All access goes through the SECURITY DEFINER functions above.
+-- reps: RLS on, NO policies = all anon access denied at the row level.
+-- The SECURITY DEFINER RPCs above run as the function owner and bypass
+-- RLS, so login/registration still works.
+-- Also revoke direct table grants as defense-in-depth.
+alter table reps enable row level security;
 revoke all on reps from anon;
+
 grant execute on function create_rep(text, text, text) to anon;
 grant execute on function verify_pin(text, text) to anon;
 grant execute on function get_rep(uuid) to anon;
 
--- Other tables: open for v1.
+-- Other tables: RLS on with permissive v1 policies.
 -- Trust boundary is the closed BDC team. Data is non-sensitive (drill answers).
--- v2: replace with RLS policies tied to a custom JWT claim from an
---     Edge Function that mints a token on PIN verify.
-grant all on rep_progress, drill_sessions, answers to anon;
+-- v2: replace `using (true)` with policies that check a custom JWT claim
+--     minted by an Edge Function after PIN verify.
+alter table rep_progress   enable row level security;
+alter table drill_sessions enable row level security;
+alter table answers        enable row level security;
+
+create policy "v1 open access" on rep_progress
+  for all to anon using (true) with check (true);
+
+create policy "v1 open access" on drill_sessions
+  for all to anon using (true) with check (true);
+
+create policy "v1 open access" on answers
+  for all to anon using (true) with check (true);
