@@ -118,6 +118,14 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 .signed-in button{background:transparent;border:none;color:var(--muted);font-family:'Outfit',sans-serif;font-size:.78rem;cursor:pointer;padding:4px 8px;border-radius:6px}
 .signed-in button:hover{color:var(--wrong)}
 
+/* Hint */
+.hint-row{margin-bottom:16px}
+.hint-btn{display:inline-flex;align-items:center;gap:6px;background:transparent;border:1px solid var(--border);color:var(--warn);font-family:'Outfit',sans-serif;font-size:.78rem;font-weight:500;padding:7px 13px;border-radius:8px;cursor:pointer;transition:all .15s}
+.hint-btn:hover:not(:disabled){background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.3)}
+.hint-btn:disabled{opacity:.6;cursor:default}
+.hint-panel{margin-top:10px;padding:11px 14px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.18);border-radius:9px;color:var(--text);font-size:.83rem;line-height:1.55}
+.hint-panel.hint-error{background:rgba(248,113,113,.06);border-color:rgba(248,113,113,.18);color:var(--wrong)}
+
 /* Streak */
 .streak{display:inline-flex;align-items:center;gap:5px;background:var(--surface);padding:4px 12px;border-radius:20px;font-family:'JetBrains Mono',monospace;font-size:.75rem;color:var(--warn);border:1px solid rgba(251,191,36,.15)}
 
@@ -327,14 +335,78 @@ async function endSession(correct,wrong){
   if(error)console.error('endSession',error);
 }
 
-async function logAnswer(rep,q,wasCorrect,typedText,selectedIdx,graderUsed,graderFeedback){
+async function logAnswer(rep,q,wasCorrect,typedText,selectedIdx,graderUsed,graderFeedback,hintUsed){
   const{error}=await sb.from('answers').insert({
     rep_id:rep.id,session_id:currentSessionId,question_id:q.id,
     question_type:q.type,question_category:q.cat,was_correct:wasCorrect,
     typed_text:typedText||null,selected_idx:selectedIdx??null,
-    grader_used:graderUsed||null,grader_feedback:graderFeedback||null
+    grader_used:graderUsed||null,grader_feedback:graderFeedback||null,
+    hint_used:!!hintUsed
   });
   if(error)console.error('logAnswer',error);
+}
+
+/* ========== HINT GENERATOR (Supabase Edge Function) ========== */
+const hintCache={}; // questionId -> hint text (per browser tab)
+let hintUsedThisQuestion=false;
+
+function esc(s){
+  if(s==null)return '';
+  return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
+async function requestHint(){
+  const q=questions[currentIdx];
+  if(!q)return;
+  const hintArea=$('hintArea');
+  const hintBtn=$('hintBtn');
+
+  // Cache hit — show instantly, still count as hint-used.
+  if(hintCache[q.id]){
+    if(hintArea)hintArea.innerHTML=`<div class="hint-panel">💡 ${esc(hintCache[q.id])}</div>`;
+    hintUsedThisQuestion=true;
+    if(hintBtn){hintBtn.disabled=true;hintBtn.textContent='💡 Hint shown';}
+    return;
+  }
+
+  if(hintBtn){hintBtn.disabled=true;hintBtn.textContent='Loading hint…';}
+
+  // For MC questions, q.correct is the index — resolve it to the option text.
+  const canonical=typeof q.correct==='string'
+    ? q.correct
+    : (Array.isArray(q.options)&&q.options[q.correct])||String(q.correct);
+
+  try{
+    const{data,error}=await sb.functions.invoke('generate-hint',{
+      body:{
+        question_prompt:q.prompt,
+        canonical_answer:canonical,
+        category:q.cat,
+        type:q.type
+      }
+    });
+    if(error){
+      let detail='';
+      try{
+        if(error.context&&typeof error.context.json==='function'){
+          const b=await error.context.json();
+          detail=' — '+JSON.stringify(b);
+        }
+      }catch{}
+      throw new Error((error.message||'Hint call failed')+detail);
+    }
+    if(data&&data.error)throw new Error(data.error);
+    if(!data||!data.hint)throw new Error('No hint returned');
+
+    hintCache[q.id]=data.hint;
+    hintUsedThisQuestion=true;
+    if(hintArea)hintArea.innerHTML=`<div class="hint-panel">💡 ${esc(data.hint)}</div>`;
+    if(hintBtn)hintBtn.textContent='💡 Hint shown';
+  }catch(e){
+    console.error('Hint failed:',e);
+    if(hintArea)hintArea.innerHTML=`<div class="hint-panel hint-error">Hint unavailable — take your best shot.</div>`;
+    if(hintBtn){hintBtn.disabled=false;hintBtn.textContent='💡 Try again';}
+  }
 }
 
 /* ========== LLM GRADER (Supabase Edge Function) ========== */
@@ -445,6 +517,7 @@ async function startDrill(){
   if(!rep){renderAuth('login');return}
   questions=pickQuestions(4);
   currentIdx=0;sessionCorrect=0;sessionWrong=0;timeLeft=180;
+  hintUsedThisQuestion=false;
   await startSession(rep.id);
   renderQuestion();
   startTimer();
@@ -490,6 +563,10 @@ function renderQuestion(){
       <div class="card-category">${q.cat}</div>
       <div class="card-type ${typeClass}">${typeLabel}</div>
       <div class="card-prompt">${q.prompt.replace(/\n/g,'<br>')}</div>
+      <div class="hint-row">
+        <button class="hint-btn" id="hintBtn" onclick="requestHint()">💡 Get a hint</button>
+        <div id="hintArea"></div>
+      </div>
       ${bodyHTML}
       <div id="feedbackArea"></div>
     </div>`;
@@ -509,7 +586,7 @@ function submitMC(){
   recordAnswer(q.id,isCorrect);
   if(isCorrect)sessionCorrect++;else sessionWrong++;
   const rep=getRep();
-  if(rep)logAnswer(rep,q,isCorrect,null,selectedOption,'exact');
+  if(rep)logAnswer(rep,q,isCorrect,null,selectedOption,'exact',null,hintUsedThisQuestion);
 
   document.querySelectorAll('.option-btn').forEach((b,i)=>{
     b.disabled=true;
@@ -544,7 +621,7 @@ async function submitTyped(){
   recordAnswer(q.id,isCorrect);
   if(isCorrect)sessionCorrect++;else sessionWrong++;
   const rep=getRep();
-  if(rep)logAnswer(rep,q,isCorrect,input,null,grader,llmFeedback);
+  if(rep)logAnswer(rep,q,isCorrect,input,null,grader,llmFeedback,hintUsedThisQuestion);
 
   showFeedback(isCorrect,q,true,llmFeedback);
 }
@@ -562,7 +639,7 @@ function showFeedback(isCorrect,q,showCorrectAnswer=false,llmFeedback=null){
     <button class="submit-btn next" onclick="nextQuestion()">Next →</button>`;
 }
 
-function nextQuestion(){currentIdx++;renderQuestion();}
+function nextQuestion(){hintUsedThisQuestion=false;currentIdx++;renderQuestion();}
 
 function renderCompletion(){
   clearInterval(timerInterval);

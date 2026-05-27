@@ -299,6 +299,7 @@ async function loadReps(){
             <th>Name</th><th>Email</th>
             <th class="num">Sessions</th><th class="num">Answers</th>
             <th class="num">Accuracy</th><th class="num">Mastered</th>
+            <th class="num">Hints</th>
             <th>Last Drilled</th>
           </tr></thead>
           <tbody>
@@ -310,6 +311,7 @@ async function loadReps(){
                 <td class="num">${fmtNum(r.answer_count)}</td>
                 <td class="num"><span class="pill ${accClass(r.accuracy)}">${fmtPct(r.accuracy)}</span></td>
                 <td class="num">${fmtNum(r.mastered_count)}</td>
+                <td class="num">${fmtNum(r.hints_used)}</td>
                 <td class="cat">${fmtDate(r.last_drilled_at)}</td>
               </tr>`).join('')}
           </tbody>
@@ -397,6 +399,7 @@ async function loadAnswers(){
                 <span>·</span>
                 <span class="pill ${r.was_correct?'good':'bad'}">${r.was_correct?'PASS':'FAIL'}</span>
                 <span class="pill muted">${esc(r.grader_used||'—')}</span>
+                ${r.hint_used?'<span class="pill warn">💡 hint</span>':''}
                 <span>·</span>
                 <span>${fmtDate(r.created_at)}</span>
               </div>
