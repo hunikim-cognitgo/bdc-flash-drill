@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BDC Flash Drill — Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#0C0C0E;--surface:#161618;--surface2:#1E1E22;--border:#2A2A2E;
+  --text:#E8E8EC;--muted:#7A7A82;--accent:#4ADE80;--accent2:#22C55E;
+  --wrong:#F87171;--warn:#FBBF24;--blue:#60A5FA;
+  --radius:12px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased}
+.app{max-width:1100px;margin:0 auto;padding:24px 20px 60px}
+
+/* Header */
+.header{display:flex;align-items:flex-end;justify-content:space-between;padding-bottom:20px;border-bottom:1px solid var(--border);margin-bottom:24px}
+.header h1{font-family:'JetBrains Mono',monospace;font-size:1.15rem;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--accent)}
+.header .sub{font-size:.78rem;color:var(--muted);margin-top:4px;font-weight:300}
+.signed-in{display:flex;align-items:center;gap:12px;font-size:.8rem;color:var(--muted)}
+.signed-in strong{color:var(--text);font-weight:500}
+.signed-in button{background:transparent;border:none;color:var(--muted);font-family:'Outfit',sans-serif;font-size:.78rem;cursor:pointer;padding:4px 8px;border-radius:6px}
+.signed-in button:hover{color:var(--wrong)}
+.signed-in a{color:var(--muted);text-decoration:none;font-size:.78rem;border-left:1px solid var(--border);padding-left:12px}
+.signed-in a:hover{color:var(--accent)}
+
+/* KPI tiles */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:24px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 16px}
+.kpi-label{font-size:.65rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:8px;font-weight:500}
+.kpi-value{font-family:'JetBrains Mono',monospace;font-size:1.75rem;font-weight:600}
+.kpi-value.green{color:var(--accent)}
+.kpi-value.blue{color:var(--blue)}
+.kpi-value.warn{color:var(--warn)}
+
+/* Tabs */
+.tabs{display:flex;gap:2px;margin-bottom:20px;background:var(--surface);padding:4px;border-radius:11px;border:1px solid var(--border);overflow-x:auto}
+.tab{flex:1;min-width:120px;padding:11px;background:transparent;border:none;border-radius:8px;color:var(--muted);font-family:'Outfit',sans-serif;font-size:.85rem;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap}
+.tab.active{background:var(--surface2);color:var(--text)}
+.tab:hover:not(.active){color:var(--text)}
+
+/* Tables */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.panel-empty{padding:32px;text-align:center;color:var(--muted);font-size:.85rem}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+thead{background:var(--surface2)}
+th{font-size:.68rem;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);font-weight:500;text-align:left;padding:12px 14px;border-bottom:1px solid var(--border)}
+td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.02)}
+td.mono,th.mono{font-family:'JetBrains Mono',monospace;font-size:.78rem}
+td.num{font-family:'JetBrains Mono',monospace;text-align:right}
+td.cat{color:var(--muted);font-size:.78rem}
+td .pill{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.7rem;font-family:'JetBrains Mono',monospace}
+td .pill.good{background:rgba(74,222,128,.12);color:var(--accent)}
+td .pill.bad{background:rgba(248,113,113,.1);color:var(--wrong)}
+td .pill.warn{background:rgba(251,191,36,.1);color:var(--warn)}
+td .pill.muted{background:var(--surface2);color:var(--muted)}
+
+/* Answer card list (Recent Answers tab) */
+.answer-list{display:flex;flex-direction:column}
+.answer-card{padding:14px 18px;border-bottom:1px solid var(--border)}
+.answer-card:last-child{border-bottom:none}
+.answer-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;font-size:.78rem;color:var(--muted)}
+.answer-meta strong{color:var(--text);font-weight:500}
+.answer-meta .qid{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--muted)}
+.answer-typed{background:var(--surface2);padding:10px 12px;border-radius:8px;font-size:.85rem;line-height:1.55;color:var(--text);margin-bottom:8px;white-space:pre-wrap}
+.answer-feedback{font-size:.82rem;color:var(--muted);line-height:1.55}
+.answer-feedback strong{color:var(--text);font-weight:500}
+
+/* Auth screen */
+.auth-screen{max-width:380px;margin:60px auto;padding:30px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+.auth-screen h2{font-family:'JetBrains Mono',monospace;font-size:1.1rem;letter-spacing:1px;margin-bottom:6px}
+.auth-screen p{color:var(--muted);font-size:.85rem;margin-bottom:20px}
+.auth-form{display:flex;flex-direction:column;gap:10px}
+.auth-input{width:100%;padding:13px 15px;background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;font-family:'Outfit',sans-serif;font-size:.92rem;color:var(--text);outline:none}
+.auth-input:focus{border-color:var(--accent)}
+.auth-input::placeholder{color:var(--muted)}
+.pin-input{letter-spacing:8px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:1.1rem}
+.auth-error{padding:11px 13px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.15);border-radius:9px;color:var(--wrong);font-size:.8rem}
+.submit-btn{width:100%;padding:13px;border:none;border-radius:10px;font-family:'Outfit',sans-serif;font-size:.88rem;font-weight:600;cursor:pointer;background:var(--accent);color:var(--bg);margin-top:8px}
+.submit-btn:hover{background:var(--accent2)}
+
+/* Loading */
+.loading{padding:32px;text-align:center;color:var(--muted);font-size:.85rem}
+
+/* Access denied */
+.denied{max-width:420px;margin:80px auto;padding:30px;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+.denied h2{font-family:'JetBrains Mono',monospace;font-size:1.05rem;color:var(--wrong);letter-spacing:1px;margin-bottom:10px}
+.denied p{color:var(--muted);font-size:.85rem;line-height:1.55;margin-bottom:18px}
+.denied a{color:var(--accent);text-decoration:none}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script>
+const $=id=>document.getElementById(id);
+
+/* ========== SUPABASE ========== */
+const SUPABASE_URL='https://llnneakazvstvefdugiu.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxsbm5lYWthenZzdHZlZmR1Z2l1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MzIyMTQsImV4cCI6MjA5NTQwODIxNH0.55Jqyd5nzoxfznLsFj89AWZu1ZpjWkWM9b6XhOthli0';
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
+/* ========== AUTH (shared with drill app via the same localStorage key) ========== */
+const REP_KEY='bdc_rep';
+function getRep(){try{return JSON.parse(localStorage.getItem(REP_KEY)||'null')}catch{return null}}
+function setRep(r){localStorage.setItem(REP_KEY,JSON.stringify(r))}
+function clearRep(){localStorage.removeItem(REP_KEY)}
+
+async function loginRep(email,pin){
+  const{data:repId,error}=await sb.rpc('verify_pin',{p_email:email.toLowerCase().trim(),p_pin:pin});
+  if(error)throw new Error(error.message||'Sign-in failed');
+  if(!repId)throw new Error('Wrong email or PIN.');
+  const{data:rows,error:e2}=await sb.rpc('get_rep',{p_id:repId});
+  if(e2)throw new Error(e2.message||'Failed to load profile');
+  const rep=rows[0];setRep(rep);return rep;
+}
+
+/* ========== ADMIN DATA FETCHERS ========== */
+async function fetchKPIs(repId){
+  const{data,error}=await sb.rpc('admin_team_kpis',{p_rep_id:repId});
+  if(error)throw error;return data&&data[0]?data[0]:null;
+}
+async function fetchReps(repId){
+  const{data,error}=await sb.rpc('admin_rep_stats',{p_rep_id:repId});
+  if(error)throw error;return data||[];
+}
+async function fetchWeakQuestions(repId){
+  const{data,error}=await sb.rpc('admin_weak_questions',{p_rep_id:repId,p_min_samples:3});
+  if(error)throw error;return data||[];
+}
+async function fetchRecentSessions(repId){
+  const{data,error}=await sb.rpc('admin_recent_sessions',{p_rep_id:repId,p_limit:25});
+  if(error)throw error;return data||[];
+}
+async function fetchRecentAnswers(repId){
+  const{data,error}=await sb.rpc('admin_recent_typed_answers',{p_rep_id:repId,p_limit:30});
+  if(error)throw error;return data||[];
+}
+
+/* ========== FORMATTERS ========== */
+function fmtDate(s){
+  if(!s)return '—';
+  const d=new Date(s);
+  const now=new Date();
+  const dayMs=864e5;
+  const diff=now-d;
+  if(diff<60_000)return 'just now';
+  if(diff<3600_000)return Math.floor(diff/60_000)+'m ago';
+  if(diff<dayMs)return Math.floor(diff/3600_000)+'h ago';
+  if(diff<7*dayMs)return Math.floor(diff/dayMs)+'d ago';
+  return d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+}
+function fmtDuration(start,end){
+  if(!start||!end)return '—';
+  const s=Math.round((new Date(end)-new Date(start))/1000);
+  if(s<60)return s+'s';
+  const m=Math.floor(s/60),r=s%60;
+  return `${m}m ${r}s`;
+}
+function fmtNum(n){
+  if(n==null)return '—';
+  return String(n);
+}
+function fmtPct(n){
+  if(n==null)return '—';
+  return Number(n).toFixed(0)+'%';
+}
+function accClass(n){
+  if(n==null)return 'muted';
+  if(n>=80)return 'good';
+  if(n>=60)return 'warn';
+  return 'bad';
+}
+function esc(s){
+  if(s==null)return '';
+  return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
+/* ========== RENDER: AUTH ========== */
+const app=$('app');
+
+function renderAuth(){
+  app.innerHTML=`
+    <div class="auth-screen">
+      <h2>Admin sign in</h2>
+      <p>Use the same email and PIN you set up for the drill app.</p>
+      <div class="auth-form">
+        <input class="auth-input" id="authEmail" type="email" placeholder="Email" autocomplete="email" />
+        <input class="auth-input pin-input" id="authPin" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" autocomplete="current-password" />
+        <div id="authError"></div>
+        <button class="submit-btn" onclick="submitAuth()">Sign in</button>
+      </div>
+    </div>`;
+  setTimeout(()=>$('authEmail')?.focus(),50);
+}
+
+async function submitAuth(){
+  const email=$('authEmail').value.trim();
+  const pin=$('authPin').value.trim();
+  const err=$('authError');
+  err.innerHTML='';
+  if(!email||!pin){err.innerHTML='<div class="auth-error">Fill in both fields.</div>';return}
+  if(!/^\d{4}$/.test(pin)){err.innerHTML='<div class="auth-error">PIN must be 4 digits.</div>';return}
+  try{
+    const rep=await loginRep(email,pin);
+    if(!rep.is_admin){renderDenied(rep);return}
+    renderDashboard(rep);
+  }catch(e){
+    err.innerHTML=`<div class="auth-error">${esc(e.message)}</div>`;
+  }
+}
+
+function renderDenied(rep){
+  app.innerHTML=`
+    <div class="denied">
+      <h2>Access Denied</h2>
+      <p>You're signed in as <strong>${esc(rep.name)}</strong>, but your account doesn't have admin access. Ask whoever set up the project to flip <code>is_admin</code> to <code>true</code> on your row in the <code>reps</code> table.</p>
+      <p><a href="index.html">← Back to the drill app</a></p>
+      <button class="submit-btn" style="margin-top:10px" onclick="signOut()">Sign out</button>
+    </div>`;
+}
+
+function signOut(){
+  clearRep();
+  renderAuth();
+}
+
+/* ========== RENDER: DASHBOARD ========== */
+let currentTab='reps';
+let currentRep=null;
+
+function renderDashboard(rep){
+  currentRep=rep;
+  app.innerHTML=`
+    <div class="header">
+      <div>
+        <h1>BDC Flash Drill — Admin</h1>
+        <div class="sub">Team analytics and per-rep performance</div>
+      </div>
+      <div class="signed-in">
+        <span>Signed in as <strong>${esc(rep.name)}</strong></span>
+        <a href="index.html">drill app</a>
+        <button onclick="signOut()">sign out</button>
+      </div>
+    </div>
+    <div id="kpiArea"><div class="loading">Loading KPIs…</div></div>
+    <div class="tabs">
+      <button class="tab ${currentTab==='reps'?'active':''}"     onclick="showTab('reps')">Reps</button>
+      <button class="tab ${currentTab==='weak'?'active':''}"     onclick="showTab('weak')">Weak Questions</button>
+      <button class="tab ${currentTab==='sessions'?'active':''}" onclick="showTab('sessions')">Recent Sessions</button>
+      <button class="tab ${currentTab==='answers'?'active':''}"  onclick="showTab('answers')">Recent Answers</button>
+    </div>
+    <div id="tabContent"><div class="loading">Loading…</div></div>`;
+  loadKPIs();
+  showTab(currentTab);
+}
+
+async function loadKPIs(){
+  try{
+    const k=await fetchKPIs(currentRep.id);
+    if(!k){$('kpiArea').innerHTML='<div class="panel panel-empty">No data yet.</div>';return}
+    $('kpiArea').innerHTML=`
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-label">Total Reps</div><div class="kpi-value">${fmtNum(k.total_reps)}</div></div>
+        <div class="kpi"><div class="kpi-label">Sessions Today</div><div class="kpi-value blue">${fmtNum(k.sessions_today)}</div></div>
+        <div class="kpi"><div class="kpi-label">Answers Today</div><div class="kpi-value blue">${fmtNum(k.answers_today)}</div></div>
+        <div class="kpi"><div class="kpi-label">Accuracy (7d)</div><div class="kpi-value ${accClass(k.accuracy_week)==='good'?'green':accClass(k.accuracy_week)==='warn'?'warn':''}">${fmtPct(k.accuracy_week)}</div></div>
+        <div class="kpi"><div class="kpi-label">Active Reps (7d)</div><div class="kpi-value">${fmtNum(k.active_reps_week)}</div></div>
+      </div>`;
+  }catch(e){
+    $('kpiArea').innerHTML=`<div class="panel panel-empty">Failed to load KPIs: ${esc(e.message||e)}</div>`;
+  }
+}
+
+function showTab(tab){
+  currentTab=tab;
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.textContent.toLowerCase().includes(tab==='reps'?'reps':tab==='weak'?'weak':tab==='sessions'?'sessions':'answers')));
+  const c=$('tabContent');
+  c.innerHTML='<div class="loading">Loading…</div>';
+  if(tab==='reps')loadReps();
+  else if(tab==='weak')loadWeak();
+  else if(tab==='sessions')loadSessions();
+  else if(tab==='answers')loadAnswers();
+}
+
+async function loadReps(){
+  try{
+    const rows=await fetchReps(currentRep.id);
+    if(!rows.length){$('tabContent').innerHTML='<div class="panel panel-empty">No reps registered yet.</div>';return}
+    $('tabContent').innerHTML=`
+      <div class="panel">
+        <table>
+          <thead><tr>
+            <th>Name</th><th>Email</th>
+            <th class="num">Sessions</th><th class="num">Answers</th>
+            <th class="num">Accuracy</th><th class="num">Mastered</th>
+            <th>Last Drilled</th>
+          </tr></thead>
+          <tbody>
+            ${rows.map(r=>`
+              <tr>
+                <td><strong>${esc(r.name)}</strong></td>
+                <td class="cat">${esc(r.email)}</td>
+                <td class="num">${fmtNum(r.session_count)}</td>
+                <td class="num">${fmtNum(r.answer_count)}</td>
+                <td class="num"><span class="pill ${accClass(r.accuracy)}">${fmtPct(r.accuracy)}</span></td>
+                <td class="num">${fmtNum(r.mastered_count)}</td>
+                <td class="cat">${fmtDate(r.last_drilled_at)}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }catch(e){
+    $('tabContent').innerHTML=`<div class="panel panel-empty">Failed to load: ${esc(e.message||e)}</div>`;
+  }
+}
+
+async function loadWeak(){
+  try{
+    const rows=await fetchWeakQuestions(currentRep.id);
+    if(!rows.length){$('tabContent').innerHTML='<div class="panel panel-empty">Not enough attempts yet (need ≥3 per question for ranking).</div>';return}
+    $('tabContent').innerHTML=`
+      <div class="panel">
+        <table>
+          <thead><tr>
+            <th>Category</th><th class="mono">Question ID</th>
+            <th class="num">Attempts</th><th class="num">Wrong</th><th class="num">Wrong Rate</th>
+          </tr></thead>
+          <tbody>
+            ${rows.map(r=>`
+              <tr>
+                <td>${esc(r.question_category||'—')}</td>
+                <td class="mono">${esc(r.question_id)}</td>
+                <td class="num">${fmtNum(r.total_count)}</td>
+                <td class="num">${fmtNum(r.wrong_count)}</td>
+                <td class="num"><span class="pill ${r.wrong_rate>=50?'bad':r.wrong_rate>=25?'warn':'good'}">${fmtPct(r.wrong_rate)}</span></td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }catch(e){
+    $('tabContent').innerHTML=`<div class="panel panel-empty">Failed to load: ${esc(e.message||e)}</div>`;
+  }
+}
+
+async function loadSessions(){
+  try{
+    const rows=await fetchRecentSessions(currentRep.id);
+    if(!rows.length){$('tabContent').innerHTML='<div class="panel panel-empty">No sessions yet.</div>';return}
+    $('tabContent').innerHTML=`
+      <div class="panel">
+        <table>
+          <thead><tr>
+            <th>Rep</th><th>Started</th><th>Duration</th>
+            <th class="num">Correct</th><th class="num">Wrong</th><th class="num">Score</th>
+          </tr></thead>
+          <tbody>
+            ${rows.map(r=>{
+              const total=r.correct_count+r.wrong_count;
+              const pct=total?Math.round(r.correct_count/total*100):null;
+              return `<tr>
+                <td><strong>${esc(r.rep_name)}</strong></td>
+                <td class="cat">${fmtDate(r.started_at)}</td>
+                <td class="cat">${fmtDuration(r.started_at,r.ended_at)}</td>
+                <td class="num">${fmtNum(r.correct_count)}</td>
+                <td class="num">${fmtNum(r.wrong_count)}</td>
+                <td class="num"><span class="pill ${accClass(pct)}">${pct==null?'—':pct+'%'}</span></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }catch(e){
+    $('tabContent').innerHTML=`<div class="panel panel-empty">Failed to load: ${esc(e.message||e)}</div>`;
+  }
+}
+
+async function loadAnswers(){
+  try{
+    const rows=await fetchRecentAnswers(currentRep.id);
+    if(!rows.length){$('tabContent').innerHTML='<div class="panel panel-empty">No typed answers yet.</div>';return}
+    $('tabContent').innerHTML=`
+      <div class="panel">
+        <div class="answer-list">
+          ${rows.map(r=>`
+            <div class="answer-card">
+              <div class="answer-meta">
+                <strong>${esc(r.rep_name)}</strong>
+                <span>·</span>
+                <span>${esc(r.question_category||'—')}</span>
+                <span class="qid">${esc(r.question_id)}</span>
+                <span>·</span>
+                <span class="pill ${r.was_correct?'good':'bad'}">${r.was_correct?'PASS':'FAIL'}</span>
+                <span class="pill muted">${esc(r.grader_used||'—')}</span>
+                <span>·</span>
+                <span>${fmtDate(r.created_at)}</span>
+              </div>
+              <div class="answer-typed">${esc(r.typed_text||'')}</div>
+              ${r.grader_feedback?`<div class="answer-feedback"><strong>Grader:</strong> ${esc(r.grader_feedback)}</div>`:''}
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }catch(e){
+    $('tabContent').innerHTML=`<div class="panel panel-empty">Failed to load: ${esc(e.message||e)}</div>`;
+  }
+}
+
+/* ========== INIT ========== */
+async function init(){
+  const rep=getRep();
+  if(!rep){renderAuth();return}
+  // Re-fetch the rep to pick up changes to is_admin without forcing a re-login
+  try{
+    const{data:rows,error}=await sb.rpc('get_rep',{p_id:rep.id});
+    if(error||!rows||!rows.length){clearRep();renderAuth();return}
+    const fresh=rows[0];
+    setRep(fresh);
+    if(!fresh.is_admin){renderDenied(fresh);return}
+    renderDashboard(fresh);
+  }catch{clearRep();renderAuth();}
+}
+init();
+</script>
+</body>
+</html>
