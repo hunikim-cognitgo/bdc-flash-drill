@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BDC Flash Drill</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
   --bg:#0C0C0E;--surface:#161618;--surface2:#1E1E22;--border:#2A2A2E;
@@ -98,6 +99,25 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 .rep-input:focus{border-color:var(--accent)}
 .rep-input::placeholder{color:var(--muted)}
 
+/* Auth */
+.auth-screen{padding:40px 0}
+.auth-tabs{display:flex;gap:4px;margin-bottom:24px;background:var(--surface);padding:4px;border-radius:11px;border:1px solid var(--border)}
+.auth-tab{flex:1;padding:10px;background:transparent;border:none;border-radius:8px;color:var(--muted);font-family:'Outfit',sans-serif;font-size:.85rem;font-weight:500;cursor:pointer;transition:all .2s}
+.auth-tab.active{background:var(--surface2);color:var(--text)}
+.auth-form{display:flex;flex-direction:column;gap:12px}
+.auth-input{width:100%;padding:14px 16px;background:var(--surface2);border:1.5px solid var(--border);border-radius:11px;font-family:'Outfit',sans-serif;font-size:.95rem;color:var(--text);outline:none}
+.auth-input:focus{border-color:var(--accent)}
+.auth-input::placeholder{color:var(--muted)}
+.auth-error{padding:12px 14px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.15);border-radius:10px;color:var(--wrong);font-size:.82rem}
+.pin-input{letter-spacing:8px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:1.2rem}
+
+/* Signed-in pill */
+.signed-in{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:16px;font-size:.8rem}
+.signed-in .who{color:var(--muted)}
+.signed-in .who strong{color:var(--text);font-weight:500;margin-left:6px}
+.signed-in button{background:transparent;border:none;color:var(--muted);font-family:'Outfit',sans-serif;font-size:.78rem;cursor:pointer;padding:4px 8px;border-radius:6px}
+.signed-in button:hover{color:var(--wrong)}
+
 /* Streak */
 .streak{display:inline-flex;align-items:center;gap:5px;background:var(--surface);padding:4px 12px;border-radius:20px;font-family:'JetBrains Mono',monospace;font-size:.75rem;color:var(--warn);border:1px solid rgba(251,191,36,.15)}
 
@@ -108,6 +128,12 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 <div class="app" id="app"></div>
 <script>
 const $=id=>document.getElementById(id);
+
+/* ========== SUPABASE ========== */
+const SUPABASE_URL='https://llnneakazvstvefdugiu.supabase.co';
+const SUPABASE_KEY='sb_publishable_8xBNfJkqe7xkiqV6yj_4qw_wfzuaxS2';
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
 /* ========== QUESTION BANK ========== */
 const Q=[
 // SEC 1 — Script
@@ -225,15 +251,95 @@ const Q=[
 {id:'found-02',type:'situation-recognition',cat:'Frameworks — "no tool used" failure',prompt:'You hit a pivot moment. You recognized it. You had the right framework in mind. You deployed nothing. What\'s the coaching response?',options:['Coach framework selection','Coach framework execution','Coach deployment — you had the moment, you had the tools, deploy ONE','Coach situation recognition'],correct:2,feedback:'"No tool used" is its own coaching bucket. The fix isn\'t more knowledge; it\'s the muscle to deploy under pressure.'},
 ];
 
-/* ========== SPACED REPETITION (Leitner 5-bucket) ========== */
-function getRepState(){try{return JSON.parse(localStorage.getItem('bdc_drill_state')||'{}')}catch{return{}}}
-function saveRepState(s){localStorage.setItem('bdc_drill_state',JSON.stringify(s))}
+/* ========== AUTH ========== */
+const REP_KEY='bdc_rep';
+function getRep(){try{return JSON.parse(localStorage.getItem(REP_KEY)||'null')}catch{return null}}
+function setRep(r){localStorage.setItem(REP_KEY,JSON.stringify(r))}
+function clearRep(){localStorage.removeItem(REP_KEY);progressCache={};currentSessionId=null;}
 
+async function registerRep(email,name,pin){
+  const e=email.toLowerCase().trim();
+  const{data,error}=await sb.rpc('create_rep',{p_email:e,p_name:name.trim(),p_pin:pin});
+  if(error){
+    const m=(error.message||'').toLowerCase();
+    if(m.includes('duplicate')||m.includes('unique'))throw new Error('That email is already registered — try signing in instead.');
+    if(m.includes('4 digits'))throw new Error('PIN must be exactly 4 digits.');
+    throw new Error(error.message||'Registration failed');
+  }
+  const rep={id:data,email:e,name:name.trim(),is_admin:false};
+  setRep(rep);return rep;
+}
+
+async function loginRep(email,pin){
+  const{data:repId,error}=await sb.rpc('verify_pin',{p_email:email.toLowerCase().trim(),p_pin:pin});
+  if(error)throw new Error(error.message||'Sign-in failed');
+  if(!repId)throw new Error('Wrong email or PIN.');
+  const{data:rows,error:e2}=await sb.rpc('get_rep',{p_id:repId});
+  if(e2)throw new Error(e2.message||'Failed to load profile');
+  const rep=rows[0];setRep(rep);return rep;
+}
+
+/* ========== PROGRESS (replaces localStorage bdc_drill_state) ========== */
+let progressCache={};
+
+async function loadProgress(repId){
+  const{data,error}=await sb.from('rep_progress').select('*').eq('rep_id',repId);
+  if(error){console.error('loadProgress',error);progressCache={};return{}}
+  const out={};
+  for(const row of data){
+    out[row.question_id]={
+      bucket:row.bucket,
+      lastSeen:row.last_seen?new Date(row.last_seen).getTime():0,
+      correct:row.correct_count,
+      wrong:row.wrong_count
+    };
+  }
+  progressCache=out;return out;
+}
+
+async function persistProgress(repId,qId,s){
+  const{error}=await sb.from('rep_progress').upsert({
+    rep_id:repId,question_id:qId,bucket:s.bucket,
+    last_seen:new Date(s.lastSeen).toISOString(),
+    correct_count:s.correct,wrong_count:s.wrong
+  },{onConflict:'rep_id,question_id'});
+  if(error)console.error('persistProgress',error);
+}
+
+/* ========== SESSIONS ========== */
+let currentSessionId=null;
+
+async function startSession(repId){
+  const{data,error}=await sb.from('drill_sessions').insert({rep_id:repId}).select('id').single();
+  if(error){console.error('startSession',error);return null}
+  currentSessionId=data.id;return data.id;
+}
+
+async function endSession(correct,wrong){
+  if(!currentSessionId)return;
+  const id=currentSessionId;currentSessionId=null;
+  const{error}=await sb.from('drill_sessions').update({
+    ended_at:new Date().toISOString(),
+    correct_count:correct,wrong_count:wrong
+  }).eq('id',id);
+  if(error)console.error('endSession',error);
+}
+
+async function logAnswer(rep,q,wasCorrect,typedText,selectedIdx,graderUsed){
+  const{error}=await sb.from('answers').insert({
+    rep_id:rep.id,session_id:currentSessionId,question_id:q.id,
+    question_type:q.type,question_category:q.cat,was_correct:wasCorrect,
+    typed_text:typedText||null,selected_idx:selectedIdx??null,
+    grader_used:graderUsed||null
+  });
+  if(error)console.error('logAnswer',error);
+}
+
+/* ========== SPACED REPETITION (Leitner 5-bucket) ========== */
 function pickQuestions(count=4){
-  const state=getRepState();
+  const state=progressCache;
   const now=Date.now();
   const bucketIntervals=[0,0,2*864e5,4*864e5,7*864e5,14*864e5]; // ms
-  // Build eligible pool
   const pool=[];
   Q.forEach(q=>{
     const s=state[q.id]||{bucket:1,lastSeen:0,correct:0,wrong:0};
@@ -241,34 +347,29 @@ function pickQuestions(count=4){
     const due=s.lastSeen+interval;
     if(now>=due)pool.push({...q,_bucket:s.bucket,_due:due});
   });
-  // Weight toward lower buckets
   pool.sort((a,b)=>a._bucket-b._bucket||(a._due-b._due));
-  // Pick from lowest buckets first, with some randomness
   const picked=[];
   const shuffled=[...pool].sort(()=>Math.random()-.5);
-  // Prioritize bucket 1, then 2, etc.
   for(let b=1;b<=5&&picked.length<count;b++){
     const inBucket=shuffled.filter(q=>q._bucket===b&&!picked.includes(q));
     for(const q of inBucket){if(picked.length<count)picked.push(q);}
   }
-  // Fill remaining with any due
   for(const q of shuffled){if(picked.length<count&&!picked.includes(q))picked.push(q);}
-  // Final shuffle
   return picked.sort(()=>Math.random()-.5);
 }
 
 function recordAnswer(qId,isCorrect){
-  const state=getRepState();
-  const s=state[qId]||{bucket:1,lastSeen:0,correct:0,wrong:0};
+  const s=progressCache[qId]||{bucket:1,lastSeen:0,correct:0,wrong:0};
   if(isCorrect){s.bucket=Math.min(s.bucket+1,5);s.correct++;}
   else{s.bucket=1;s.wrong++;}
   s.lastSeen=Date.now();
-  state[qId]=s;
-  saveRepState(state);
+  progressCache[qId]=s;
+  const rep=getRep();
+  if(rep)persistProgress(rep.id,qId,s);
 }
 
 function getOverallStats(){
-  const state=getRepState();
+  const state=progressCache;
   let total=0,correct=0,wrong=0,mastered=0;
   Object.values(state).forEach(s=>{total++;correct+=s.correct;wrong+=s.wrong;if(s.bucket>=4)mastered++;});
   return{seen:total,correct,wrong,mastered,total:Q.length};
@@ -290,8 +391,10 @@ const app=$('app');
 
 function renderStart(){
   const stats=getOverallStats();
+  const rep=getRep();
   app.innerHTML=`
     <div class="header"><h1>BDC Flash Drill</h1><div class="sub">3 minutes · 4 questions · daily</div></div>
+    <div class="signed-in"><span class="who">Signed in as<strong>${rep?.name||''}</strong></span><button onclick="signOut()">Sign out</button></div>
     <div class="start-screen">
       <h2>Ready to drill?</h2>
       <p>4 questions in 3 minutes. Missed questions come back tomorrow. Mastered ones space out.</p>
@@ -301,16 +404,21 @@ function renderStart(){
         <div><span>✅</span> ${stats.correct} correct lifetime</div>
         <div><span>❌</span> ${stats.wrong} wrong lifetime</div>
       </div>
-      <input class="rep-input" id="repName" placeholder="Your name" value="${localStorage.getItem('bdc_rep_name')||''}" />
       <button class="submit-btn primary" onclick="startDrill()">Start Drill</button>
     </div>`;
 }
 
-function startDrill(){
-  const name=$('repName')?.value?.trim();
-  if(name)localStorage.setItem('bdc_rep_name',name);
+function signOut(){
+  clearRep();
+  renderAuth('login');
+}
+
+async function startDrill(){
+  const rep=getRep();
+  if(!rep){renderAuth('login');return}
   questions=pickQuestions(4);
   currentIdx=0;sessionCorrect=0;sessionWrong=0;timeLeft=180;
+  await startSession(rep.id);
   renderQuestion();
   startTimer();
 }
@@ -373,6 +481,8 @@ function submitMC(){
   const isCorrect=selectedOption===q.correct;
   recordAnswer(q.id,isCorrect);
   if(isCorrect)sessionCorrect++;else sessionWrong++;
+  const rep=getRep();
+  if(rep)logAnswer(rep,q,isCorrect,null,selectedOption,'exact');
 
   document.querySelectorAll('.option-btn').forEach((b,i)=>{
     b.disabled=true;
@@ -389,6 +499,8 @@ function submitTyped(){
   const isCorrect=gradeTyped(input,q);
   recordAnswer(q.id,isCorrect);
   if(isCorrect)sessionCorrect++;else sessionWrong++;
+  const rep=getRep();
+  if(rep)logAnswer(rep,q,isCorrect,input,null,'keyword');
   $('typeInput').disabled=true;
   showFeedback(isCorrect,q,true);
 }
@@ -408,6 +520,7 @@ function nextQuestion(){currentIdx++;renderQuestion();}
 
 function renderCompletion(){
   clearInterval(timerInterval);
+  endSession(sessionCorrect,sessionWrong);
   const pct=questions.length?Math.round((sessionCorrect/questions.length)*100):0;
   const stats=getOverallStats();
   const icon=pct>=75?'🔥':pct>=50?'💪':'📚';
@@ -430,7 +543,63 @@ function renderCompletion(){
     </div>`;
 }
 
-renderStart();
+function renderAuth(mode='login'){
+  app.innerHTML=`
+    <div class="header"><h1>BDC Flash Drill</h1><div class="sub">Sign in to start drilling</div></div>
+    <div class="auth-screen">
+      <div class="auth-tabs">
+        <button class="auth-tab ${mode==='login'?'active':''}" onclick="renderAuth('login')">Sign in</button>
+        <button class="auth-tab ${mode==='register'?'active':''}" onclick="renderAuth('register')">Register</button>
+      </div>
+      <div class="auth-form">
+        ${mode==='register'?'<input class="auth-input" id="authName" placeholder="Your name" autocomplete="name" />':''}
+        <input class="auth-input" id="authEmail" type="email" placeholder="Email" autocomplete="email" />
+        <input class="auth-input pin-input" id="authPin" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" autocomplete="${mode==='register'?'new-password':'current-password'}" />
+        <div id="authError"></div>
+        <button class="submit-btn primary" onclick="submitAuth('${mode}')">${mode==='register'?'Create account':'Sign in'}</button>
+      </div>
+    </div>`;
+  setTimeout(()=>$(mode==='register'?'authName':'authEmail')?.focus(),50);
+}
+
+async function submitAuth(mode){
+  const email=$('authEmail').value.trim();
+  const pin=$('authPin').value.trim();
+  const name=mode==='register'?$('authName').value.trim():'';
+  const err=$('authError');
+  err.innerHTML='';
+  if(!email||!pin||(mode==='register'&&!name)){
+    err.innerHTML='<div class="auth-error">Fill in all fields.</div>';return;
+  }
+  if(!/^\d{4}$/.test(pin)){
+    err.innerHTML='<div class="auth-error">PIN must be 4 digits.</div>';return;
+  }
+  try{
+    const rep=mode==='register'?await registerRep(email,name,pin):await loginRep(email,pin);
+    await loadProgress(rep.id);
+    renderStart();
+  }catch(e){
+    err.innerHTML=`<div class="auth-error">${e.message}</div>`;
+  }
+}
+
+async function init(){
+  // Clean up legacy localStorage keys from pre-Supabase versions
+  localStorage.removeItem('bdc_rep_name');
+  localStorage.removeItem('bdc_drill_state');
+  const rep=getRep();
+  if(!rep){renderAuth('login');return}
+  // Refresh rep info from server — validates the cached id and picks up changes
+  try{
+    const{data:rows,error}=await sb.rpc('get_rep',{p_id:rep.id});
+    if(error||!rows||!rows.length){clearRep();renderAuth('login');return}
+    setRep(rows[0]);
+  }catch{clearRep();renderAuth('login');return}
+  await loadProgress(rep.id);
+  renderStart();
+}
+
+init();
 </script>
 </body>
 </html>
