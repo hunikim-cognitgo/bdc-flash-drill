@@ -34,11 +34,48 @@ create table reps (
 );
 
 -- ============================================================
+-- Trigger functions — denormalize rep_name onto each row so the
+-- Table Editor is readable without manual joins.
+-- ============================================================
+
+-- Populate rep_name from reps on insert
+create or replace function populate_rep_name() returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  select name into new.rep_name from reps where id = new.rep_id;
+  return new;
+end;
+$$;
+
+-- Sync rep_name across denormalized tables if reps.name changes
+create or replace function sync_rep_name() returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.name is distinct from old.name then
+    update rep_progress   set rep_name = new.name where rep_id = new.id;
+    update drill_sessions set rep_name = new.name where rep_id = new.id;
+    update answers        set rep_name = new.name where rep_id = new.id;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger reps_sync_name after update on reps
+  for each row execute function sync_rep_name();
+
+-- ============================================================
 -- rep_progress — per-rep, per-question Leitner state.
 -- Direct replacement for the localStorage `bdc_drill_state` object.
 -- ============================================================
 create table rep_progress (
   rep_id        uuid not null references reps(id) on delete cascade,
+  rep_name      text not null,
   question_id   text not null,
   bucket        smallint not null default 1 check (bucket between 1 and 5),
   last_seen     timestamptz,
@@ -49,12 +86,16 @@ create table rep_progress (
 
 create index rep_progress_rep_idx on rep_progress(rep_id);
 
+create trigger rep_progress_populate_name before insert on rep_progress
+  for each row execute function populate_rep_name();
+
 -- ============================================================
 -- drill_sessions — one row per drill attempt.
 -- ============================================================
 create table drill_sessions (
   id            uuid primary key default gen_random_uuid(),
   rep_id        uuid not null references reps(id) on delete cascade,
+  rep_name      text not null,
   started_at    timestamptz not null default now(),
   ended_at      timestamptz,
   correct_count integer not null default 0,
@@ -64,6 +105,9 @@ create table drill_sessions (
 create index drill_sessions_rep_idx     on drill_sessions(rep_id);
 create index drill_sessions_started_idx on drill_sessions(started_at desc);
 
+create trigger drill_sessions_populate_name before insert on drill_sessions
+  for each row execute function populate_rep_name();
+
 -- ============================================================
 -- answers — granular log of every question response.
 -- Powers the admin dashboard.
@@ -71,6 +115,7 @@ create index drill_sessions_started_idx on drill_sessions(started_at desc);
 create table answers (
   id                uuid primary key default gen_random_uuid(),
   rep_id            uuid not null references reps(id) on delete cascade,
+  rep_name          text not null,
   session_id        uuid references drill_sessions(id) on delete set null,
   question_id       text not null,
   question_type     text not null,
@@ -86,6 +131,9 @@ create table answers (
 create index answers_rep_idx      on answers(rep_id);
 create index answers_question_idx on answers(question_id);
 create index answers_created_idx  on answers(created_at desc);
+
+create trigger answers_populate_name before insert on answers
+  for each row execute function populate_rep_name();
 
 -- ============================================================
 -- Auth RPCs (SECURITY DEFINER — execute with table owner's privileges
