@@ -325,14 +325,29 @@ async function endSession(correct,wrong){
   if(error)console.error('endSession',error);
 }
 
-async function logAnswer(rep,q,wasCorrect,typedText,selectedIdx,graderUsed){
+async function logAnswer(rep,q,wasCorrect,typedText,selectedIdx,graderUsed,graderFeedback){
   const{error}=await sb.from('answers').insert({
     rep_id:rep.id,session_id:currentSessionId,question_id:q.id,
     question_type:q.type,question_category:q.cat,was_correct:wasCorrect,
     typed_text:typedText||null,selected_idx:selectedIdx??null,
-    grader_used:graderUsed||null
+    grader_used:graderUsed||null,grader_feedback:graderFeedback||null
   });
   if(error)console.error('logAnswer',error);
+}
+
+/* ========== LLM GRADER (Supabase Edge Function) ========== */
+async function gradeWithLLM(q,repAnswer){
+  const{data,error}=await sb.functions.invoke('grade-answer',{
+    body:{
+      question_prompt:q.prompt,
+      canonical_answer:q.correct,
+      key_concepts:q.keys||[],
+      rep_answer:repAnswer
+    }
+  });
+  if(error)throw new Error(error.message||'Edge function call failed');
+  if(data&&data.error)throw new Error(data.error);
+  return data; // { pass, score, feedback, missing_concepts }
 }
 
 /* ========== SPACED REPETITION (Leitner 5-bucket) ========== */
@@ -447,7 +462,7 @@ function renderQuestion(){
   if(isMC){
     bodyHTML=`<div class="options">${q.options.map((o,i)=>`<button class="option-btn" data-idx="${i}" onclick="selectOption(this,${i})">${o}</button>`).join('')}</div><button class="submit-btn primary" id="submitBtn" onclick="submitMC()" disabled>Submit</button>`;
   }else{
-    bodyHTML=`<div class="type-area"><textarea class="type-input" id="typeInput" placeholder="${isType?'Type your answer from memory...':'What\'s wrong? Type your answer...'}"></textarea></div><button class="submit-btn primary" onclick="submitTyped()">Submit</button>`;
+    bodyHTML=`<div class="type-area"><textarea class="type-input" id="typeInput" placeholder="${isType?'Type your answer from memory...':'What\'s wrong? Type your answer...'}"></textarea></div><button class="submit-btn primary" id="submitBtn" onclick="submitTyped()">Submit</button>`;
   }
 
   app.innerHTML=`
@@ -493,24 +508,43 @@ function submitMC(){
   showFeedback(isCorrect,q);
 }
 
-function submitTyped(){
+async function submitTyped(){
   const q=questions[currentIdx];
   const input=$('typeInput').value;
-  const isCorrect=gradeTyped(input,q);
+  if(!input.trim())return;
+
+  // Lock the UI while the LLM grades — typical ~500-1500ms.
+  $('typeInput').disabled=true;
+  const btn=$('submitBtn');
+  if(btn){btn.disabled=true;btn.textContent='Grading…';}
+
+  let isCorrect,llmFeedback=null,grader='llm';
+  try{
+    const grade=await gradeWithLLM(q,input);
+    isCorrect=!!grade.pass;
+    llmFeedback=grade.feedback||null;
+  }catch(e){
+    console.warn('LLM grader failed, falling back to keyword:',e);
+    isCorrect=gradeTyped(input,q);
+    grader='keyword-fallback';
+  }
+
   recordAnswer(q.id,isCorrect);
   if(isCorrect)sessionCorrect++;else sessionWrong++;
   const rep=getRep();
-  if(rep)logAnswer(rep,q,isCorrect,input,null,'keyword');
-  $('typeInput').disabled=true;
-  showFeedback(isCorrect,q,true);
+  if(rep)logAnswer(rep,q,isCorrect,input,null,grader,llmFeedback);
+
+  showFeedback(isCorrect,q,true,llmFeedback);
 }
 
-function showFeedback(isCorrect,q,showCorrectAnswer=false){
+function showFeedback(isCorrect,q,showCorrectAnswer=false,llmFeedback=null){
   const fb=document.getElementById('feedbackArea');
+  // Prefer the LLM's personalized feedback when present; fall back to the static feedback baked into the question.
+  const feedbackText=llmFeedback||q.feedback;
   fb.innerHTML=`
     <div class="feedback ${isCorrect?'correct-fb':'wrong-fb'}">
       <span class="fb-label">${isCorrect?'✓ Correct':'✗ Incorrect'}</span>
-      ${q.feedback}
+      ${feedbackText}
       ${!isCorrect&&q.correct&&typeof q.correct==='string'?`<div class="correct-answer"><strong>Correct answer:</strong><br>${q.correct}</div>`:''}
     </div>
     <button class="submit-btn next" onclick="nextQuestion()">Next →</button>`;
