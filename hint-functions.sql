@@ -38,7 +38,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if not exists (select 1 from reps where id = p_rep_id and is_admin) then
+  if not exists (select 1 from reps where reps.id = p_rep_id and is_admin) then
     raise exception 'not authorized';
   end if;
   return query
@@ -81,7 +81,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if not exists (select 1 from reps where id = p_rep_id and is_admin) then
+  if not exists (select 1 from reps where reps.id = p_rep_id and is_admin) then
     raise exception 'not authorized';
   end if;
   return query
