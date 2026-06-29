@@ -72,6 +72,31 @@ td .pill.muted{background:var(--surface2);color:var(--muted)}
 .answer-feedback{font-size:.82rem;color:var(--muted);line-height:1.55}
 .answer-feedback strong{color:var(--text);font-weight:500}
 
+/* Clickable rep rows */
+tr.clickable{cursor:pointer}
+tr.clickable:hover td{background:rgba(74,222,128,.04)}
+.chev{color:var(--muted);font-weight:600;margin-left:4px}
+tr.clickable:hover .chev{color:var(--accent)}
+
+/* Per-rep detail */
+.detail-head{display:flex;align-items:center;gap:16px;margin-bottom:18px}
+.back-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'Outfit',sans-serif;font-size:.82rem;padding:8px 14px;border-radius:8px;cursor:pointer;white-space:nowrap}
+.back-btn:hover{border-color:var(--accent);color:var(--accent)}
+.detail-title{display:flex;flex-direction:column;line-height:1.3}
+.detail-title strong{font-size:1.05rem}
+.detail-email{font-size:.78rem;color:var(--muted)}
+.detail-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:22px}
+.chip{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px}
+.chip-v{font-family:'JetBrains Mono',monospace;font-size:1.3rem;font-weight:600}
+.chip-v.g{color:var(--accent)}.chip-v.w{color:var(--warn)}.chip-v.r{color:var(--wrong)}
+.chip-l{font-size:.62rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-top:4px}
+.detail-h{font-family:'JetBrains Mono',monospace;font-size:.82rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--accent);margin:24px 0 10px}
+.detail-sub{color:var(--muted);font-weight:400;letter-spacing:0;text-transform:none;font-family:'Outfit',sans-serif;font-size:.75rem}
+.scroll-panel{max-height:420px;overflow-y:auto}
+.pill.good{background:rgba(74,222,128,.12);color:var(--accent)}
+.pill.warn{background:rgba(251,191,36,.12);color:var(--warn)}
+.pill.bad{background:rgba(248,113,113,.1);color:var(--wrong)}
+
 /* Auth screen */
 .auth-screen{max-width:380px;margin:60px auto;padding:30px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
 .auth-screen h2{font-family:'JetBrains Mono',monospace;font-size:1.1rem;letter-spacing:1px;margin-bottom:6px}
@@ -139,6 +164,18 @@ async function fetchRecentSessions(repId){
 }
 async function fetchRecentAnswers(repId){
   const{data,error}=await sb.rpc('admin_recent_typed_answers',{p_rep_id:repId,p_limit:30});
+  if(error)throw error;return data||[];
+}
+async function fetchRepCategoryBreakdown(repId,target){
+  const{data,error}=await sb.rpc('admin_rep_category_breakdown',{p_rep_id:repId,p_target:target});
+  if(error)throw error;return data||[];
+}
+async function fetchRepProgress(repId,target){
+  const{data,error}=await sb.rpc('admin_rep_progress',{p_rep_id:repId,p_target:target});
+  if(error)throw error;return data||[];
+}
+async function fetchRepTypedAnswers(repId,target){
+  const{data,error}=await sb.rpc('admin_rep_typed_answers',{p_rep_id:repId,p_target:target,p_limit:40});
   if(error)throw error;return data||[];
 }
 
@@ -288,9 +325,11 @@ function showTab(tab){
   else if(tab==='answers')loadAnswers();
 }
 
+let repsCache=[];
 async function loadReps(){
   try{
     const rows=await fetchReps(currentRep.id);
+    repsCache=rows;
     if(!rows.length){$('tabContent').innerHTML='<div class="panel panel-empty">No reps registered yet.</div>';return}
     $('tabContent').innerHTML=`
       <div class="panel">
@@ -304,8 +343,8 @@ async function loadReps(){
           </tr></thead>
           <tbody>
             ${rows.map(r=>`
-              <tr>
-                <td><strong>${esc(r.name)}</strong></td>
+              <tr class="clickable" onclick="openRepDetail('${r.rep_id}')" title="View ${esc(r.name)}'s detail">
+                <td><strong>${esc(r.name)}</strong> <span class="chev">›</span></td>
                 <td class="cat">${esc(r.email)}</td>
                 <td class="num">${fmtNum(r.session_count)}</td>
                 <td class="num">${fmtNum(r.answer_count)}</td>
@@ -319,6 +358,107 @@ async function loadReps(){
       </div>`;
   }catch(e){
     $('tabContent').innerHTML=`<div class="panel panel-empty">Failed to load: ${esc(e.message||e)}</div>`;
+  }
+}
+
+/* ========== PER-REP DRILL-DOWN ========== */
+function bucketClass(b){
+  if(b>=4)return 'good';
+  if(b===3)return 'warn';
+  return 'bad';
+}
+
+async function openRepDetail(targetId){
+  const rep=repsCache.find(r=>r.rep_id===targetId);
+  if(!rep)return;
+  const c=$('tabContent');
+  c.innerHTML='<div class="loading">Loading rep detail…</div>';
+  try{
+    const[cats,progress,answers]=await Promise.all([
+      fetchRepCategoryBreakdown(currentRep.id,targetId),
+      fetchRepProgress(currentRep.id,targetId),
+      fetchRepTypedAnswers(currentRep.id,targetId)
+    ]);
+
+    const statChips=`
+      <div class="detail-stats">
+        <div class="chip"><div class="chip-v">${fmtNum(rep.session_count)}</div><div class="chip-l">Sessions</div></div>
+        <div class="chip"><div class="chip-v">${fmtNum(rep.answer_count)}</div><div class="chip-l">Answers</div></div>
+        <div class="chip"><div class="chip-v ${accClass(rep.accuracy)==='good'?'g':accClass(rep.accuracy)==='warn'?'w':'r'}">${fmtPct(rep.accuracy)}</div><div class="chip-l">Accuracy</div></div>
+        <div class="chip"><div class="chip-v">${fmtNum(rep.mastered_count)}</div><div class="chip-l">Mastered</div></div>
+        <div class="chip"><div class="chip-v">${fmtNum(rep.hints_used)}</div><div class="chip-l">Hints used</div></div>
+        <div class="chip"><div class="chip-v" style="font-size:.95rem">${fmtDate(rep.last_drilled_at)}</div><div class="chip-l">Last drilled</div></div>
+      </div>`;
+
+    const catSection=cats.length?`
+      <h3 class="detail-h">Weakest categories</h3>
+      <div class="panel">
+        <table>
+          <thead><tr><th>Category</th><th class="num">Attempts</th><th class="num">Wrong</th><th class="num">Accuracy</th></tr></thead>
+          <tbody>
+            ${cats.map(r=>`
+              <tr>
+                <td>${esc(r.question_category||'—')}</td>
+                <td class="num">${fmtNum(r.total)}</td>
+                <td class="num">${fmtNum(r.wrong)}</td>
+                <td class="num"><span class="pill ${accClass(r.accuracy)}">${fmtPct(r.accuracy)}</span></td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`:'<h3 class="detail-h">Weakest categories</h3><div class="panel panel-empty">No answers yet.</div>';
+
+    const progSection=progress.length?`
+      <h3 class="detail-h">Question state <span class="detail-sub">(least mastered first · bucket 1–5)</span></h3>
+      <div class="panel scroll-panel">
+        <table>
+          <thead><tr><th class="mono">Question ID</th><th>Category</th><th class="num">Bucket</th><th class="num">✓</th><th class="num">✗</th><th>Last seen</th></tr></thead>
+          <tbody>
+            ${progress.map(r=>`
+              <tr>
+                <td class="mono">${esc(r.question_id)}</td>
+                <td class="cat">${esc(r.question_category||'—')}</td>
+                <td class="num"><span class="pill ${bucketClass(r.bucket)}">${r.bucket}</span></td>
+                <td class="num">${fmtNum(r.correct_count)}</td>
+                <td class="num">${fmtNum(r.wrong_count)}</td>
+                <td class="cat">${fmtDate(r.last_seen)}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`:'<h3 class="detail-h">Question state</h3><div class="panel panel-empty">No progress recorded yet.</div>';
+
+    const answerSection=answers.length?`
+      <h3 class="detail-h">Recent typed answers</h3>
+      <div class="panel">
+        <div class="answer-list">
+          ${answers.map(r=>`
+            <div class="answer-card">
+              <div class="answer-meta">
+                <span>${esc(r.question_category||'—')}</span>
+                <span class="qid">${esc(r.question_id)}</span>
+                <span>·</span>
+                <span class="pill ${r.was_correct?'good':'bad'}">${r.was_correct?'PASS':'FAIL'}</span>
+                <span class="pill muted">${esc(r.grader_used||'—')}</span>
+                ${r.hint_used?'<span class="pill warn">💡 hint</span>':''}
+                <span>·</span>
+                <span>${fmtDate(r.created_at)}</span>
+              </div>
+              <div class="answer-typed">${esc(r.typed_text||'')}</div>
+              ${r.grader_feedback?`<div class="answer-feedback"><strong>Grader:</strong> ${esc(r.grader_feedback)}</div>`:''}
+            </div>`).join('')}
+        </div>
+      </div>`:'<h3 class="detail-h">Recent typed answers</h3><div class="panel panel-empty">No typed answers yet.</div>';
+
+    c.innerHTML=`
+      <div class="detail-head">
+        <button class="back-btn" onclick="showTab('reps')">← All reps</button>
+        <div class="detail-title"><strong>${esc(rep.name)}</strong><span class="detail-email">${esc(rep.email)}</span></div>
+      </div>
+      ${statChips}
+      ${catSection}
+      ${progSection}
+      ${answerSection}`;
+  }catch(e){
+    c.innerHTML=`<div class="panel panel-empty">Failed to load rep detail: ${esc(e.message||e)}</div>`;
   }
 }
 

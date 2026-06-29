@@ -117,6 +117,9 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 .signed-in .who strong{color:var(--text);font-weight:500;margin-left:6px}
 .signed-in button{background:transparent;border:none;color:var(--muted);font-family:'Outfit',sans-serif;font-size:.78rem;cursor:pointer;padding:4px 8px;border-radius:6px}
 .signed-in button:hover{color:var(--wrong)}
+.signed-in .right{display:flex;align-items:center;gap:4px}
+.signed-in a.admin-link{color:var(--muted);text-decoration:none;font-size:.78rem;padding:4px 8px;border-radius:6px;border:1px solid var(--border)}
+.signed-in a.admin-link:hover{color:var(--accent);border-color:rgba(74,222,128,.3)}
 
 /* Hint */
 .hint-row{margin-bottom:16px}
@@ -493,7 +496,7 @@ function renderStart(){
   const rep=getRep();
   app.innerHTML=`
     <div class="header"><h1>BDC Flash Drill</h1><div class="sub">3 minutes · 4 questions · daily</div></div>
-    <div class="signed-in"><span class="who">Signed in as<strong>${rep?.name||''}</strong></span><button onclick="signOut()">Sign out</button></div>
+    <div class="signed-in"><span class="who">Signed in as<strong>${rep?.name||''}</strong></span><span class="right"><a class="admin-link" href="admin.html">Admin</a><button onclick="signOut()">Sign out</button></span></div>
     <div class="start-screen">
       <h2>Ready to drill?</h2>
       <p>4 questions in 3 minutes. Missed questions come back tomorrow. Mastered ones space out.</p>
