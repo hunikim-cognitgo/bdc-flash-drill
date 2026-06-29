@@ -110,6 +110,9 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 .auth-input::placeholder{color:var(--muted)}
 .auth-error{padding:12px 14px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.15);border-radius:10px;color:var(--wrong);font-size:.82rem}
 .pin-input{letter-spacing:8px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:1.2rem}
+.auth-foot{text-align:center;margin-top:22px;padding-top:18px;border-top:1px solid var(--border)}
+.auth-foot a{color:var(--muted);text-decoration:none;font-size:.8rem;transition:color .15s}
+.auth-foot a:hover{color:var(--accent)}
 
 /* Signed-in pill */
 .signed-in{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:16px;font-size:.8rem}
@@ -684,6 +687,7 @@ function renderAuth(mode='login'){
         <div id="authError"></div>
         <button class="submit-btn primary" onclick="submitAuth('${mode}')">${mode==='register'?'Create account':'Sign in'}</button>
       </div>
+      <div class="auth-foot"><a href="admin.html">Admin dashboard →</a></div>
     </div>`;
   setTimeout(()=>$(mode==='register'?'authName':'authEmail')?.focus(),50);
 }
